@@ -1,0 +1,116 @@
+---
+# Game 3: Network Reconnaissance
+#
+# Opens three identifiable services on the target — anonymous FTP (21), a
+# decoy Apache HTTP page (80), and a custom TCP banner service (8888) — and
+# hides the flag behind only the last one, requiring an attacker to actually
+# enumerate and inspect each discovered port rather than guess.
+- name: Deploy Network Reconnaissance scenario
+  hosts: cyberrange
+  vars:
+    banner_port: 8888
+    flag_content: "WMG{r3c0n_1s_m0r3_th4n_just_p0rt_sc4nning}"
+
+  tasks:
+    # --- Decoy 1: anonymous FTP ---------------------------------------
+    - name: Install vsftpd
+      ansible.builtin.apt:
+        name: vsftpd
+        state: present
+        update_cache: yes
+
+    - name: Enable anonymous FTP access
+      ansible.builtin.lineinfile:
+        path: /etc/vsftpd.conf
+        regexp: '^#?anonymous_enable='
+        line: 'anonymous_enable=YES'
+
+    - name: Disable local user FTP logins
+      ansible.builtin.lineinfile:
+        path: /etc/vsftpd.conf
+        regexp: '^#?local_enable='
+        line: 'local_enable=NO'
+
+    - name: Disable FTP write access
+      ansible.builtin.lineinfile:
+        path: /etc/vsftpd.conf
+        regexp: '^#?write_enable='
+        line: 'write_enable=NO'
+      register: vsftpd_conf
+
+    - name: Deploy decoy content to the anonymous FTP root
+      ansible.builtin.copy:
+        src: files/ftp_readme.txt
+        dest: /srv/ftp/readme.txt
+        mode: '0644'
+
+    - name: Ensure vsftpd's secure chroot jail directory exists
+      # Normally created by systemd-tmpfiles at boot; this container has no
+      # systemd, so without it vsftpd starts but every FTP session fails
+      # (nmap -sV reports it as "vsftpd (broken: not found: directory given
+      # in 'secure_chroot_dir')" and login attempts get no valid reply).
+      ansible.builtin.file:
+        path: /var/run/vsftpd/empty
+        state: directory
+        mode: '0755'
+
+    - name: Check whether vsftpd is already running
+      ansible.builtin.command: pgrep -x vsftpd
+      register: vsftpd_running
+      changed_when: false
+      failed_when: false
+
+    - name: Stop vsftpd so it can be restarted with the new configuration
+      ansible.builtin.command: pkill -x vsftpd
+      when: vsftpd_conf.changed and vsftpd_running.rc == 0
+
+    - name: Start vsftpd
+      # vsftpd on this image runs in the foreground rather than
+      # self-daemonizing, so it must be launched fire-and-forget.
+      ansible.builtin.command: vsftpd /etc/vsftpd.conf
+      async: 86400
+      poll: 0
+      when: vsftpd_running.rc != 0 or vsftpd_conf.changed
+
+    # --- Decoy 2: HTTP on the standard web port (80) -------------------
+    - name: Install Apache
+      ansible.builtin.apt:
+        name: apache2
+        state: present
+        update_cache: yes
+
+    - name: Deploy decoy HTTP content to the default site
+      ansible.builtin.copy:
+        src: files/decoy_index.html
+        dest: /var/www/html/index.html
+        mode: '0644'
+
+    - name: Check whether Apache is already running
+      ansible.builtin.command: pgrep -x apache2
+      register: apache_running
+      changed_when: false
+      failed_when: false
+
+    - name: Start Apache
+      ansible.builtin.command: apache2ctl start
+      when: apache_running.rc != 0
+
+    # --- The real target: custom TCP banner service -------------------
+    - name: Deploy the custom banner service
+      ansible.builtin.template:
+        src: files/banner_service.py.j2
+        dest: /opt/banner_service.py
+        mode: '0755'
+
+    - name: Check whether the banner service is already listening
+      ansible.builtin.wait_for:
+        port: "{{ banner_port }}"
+        timeout: 1
+      register: banner_check
+      ignore_errors: true
+
+    - name: Launch the banner service in the background
+      ansible.builtin.command: python3 /opt/banner_service.py
+      async: 86400
+      poll: 0
+      when: banner_check is failed

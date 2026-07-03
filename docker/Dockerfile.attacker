@@ -1,0 +1,20 @@
+# Attacker toolbox image.
+#
+# Used to run the exploitation tools (hydra, nmap, netcat, curl) referenced in
+# each game's solution.md, without requiring host-level package installs or
+# sudo access. Runs on the same Docker network as the target so it can reach
+# it at 127.0.0.1 via --network host (Linux) or by targeting the published
+# container ports.
+FROM kalilinux/kali-rolling
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        hydra \
+        nmap \
+        netcat-traditional \
+        curl \
+        openssh-client \
+        ftp \
+    && rm -rf /var/lib/apt/lists/*
+
+CMD ["/bin/bash"]

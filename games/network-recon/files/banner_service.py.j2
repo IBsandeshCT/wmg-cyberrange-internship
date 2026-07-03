@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""Minimal persistent TCP banner service used by the Network Recon game.
+
+Listens on a fixed port and sends a banner (including the flag) to every
+client that connects, then closes the connection. Deliberately dependency-
+free so it only needs the Python interpreter already present on the target.
+"""
+import socket
+
+HOST = "0.0.0.0"
+PORT = {{ banner_port }}
+BANNER = """\
+==============================================
+ WMG-TELEMETRY-SVC build 2019.03 (internal use)
+==============================================
+{{ flag_content }}
+"""
+
+
+def main():
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind((HOST, PORT))
+    server.listen(5)
+    while True:
+        conn, _addr = server.accept()
+        try:
+            conn.sendall(BANNER.encode())
+        finally:
+            conn.close()
+
+
+if __name__ == "__main__":
+    main()

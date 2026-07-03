@@ -1,0 +1,28 @@
+# Cyberrange target base image
+#
+# Base OS is Ubuntu 22.04 so the container ships Python 3.10 out of the box
+# (ansible-core >= 2.17 requires Python >= 3.9 on managed nodes; the previously
+# used rastasheep/ubuntu-sshd:18.04 image only had Python 3.6.5, which cannot
+# run modern Ansible modules at all). Using a plain official Ubuntu image plus
+# openssh-server, rather than a stale third-party "-sshd" image, keeps the
+# environment reproducible and easy to rebuild.
+#
+# This image only provides SSH connectivity for Ansible control. Per-game
+# vulnerabilities (weak SSH creds, Shellshock CGI, open recon ports) are
+# configured on top of this base by each game's setup.yml playbook, not baked
+# in here, so the base image stays reusable across all three games.
+FROM ubuntu:22.04
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        openssh-server \
+        python3 \
+        sudo \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /run/sshd \
+    && sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config \
+    && sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config \
+    && echo 'root:root' | chpasswd
+
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D"]

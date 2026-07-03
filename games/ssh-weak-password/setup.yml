@@ -1,0 +1,53 @@
+---
+# Game 1: SSH Weak Password Attack
+#
+# Deploys an intentionally weak SSH account ("student" / "password123"),
+# a supporting wordlist, and a flag that is only readable once an attacker
+# has actually authenticated as that account.
+- name: Deploy SSH Weak Password Attack scenario
+  hosts: cyberrange
+  vars:
+    student_user: student
+    student_password: password123
+    flag_content: "WMG{ssh_w3ak_p4ssw0rds_are_never_ok}"
+
+  tasks:
+    - name: Ensure sshd allows password authentication
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication yes'
+
+    - name: Create low-privilege 'student' account
+      ansible.builtin.user:
+        name: "{{ student_user }}"
+        shell: /bin/bash
+        create_home: yes
+        state: present
+
+    - name: Set student's password to a common, weak value (intentional vulnerability)
+      ansible.builtin.shell: "echo '{{ student_user }}:{{ student_password }}' | chpasswd"
+      changed_when: false
+
+    - name: Deploy the common-password wordlist used for brute forcing
+      ansible.builtin.copy:
+        src: files/wordlist.txt
+        dest: "/home/{{ student_user }}/wordlist.txt"
+        owner: "{{ student_user }}"
+        group: "{{ student_user }}"
+        mode: '0644'
+
+    - name: Plant the flag in student's home directory
+      ansible.builtin.copy:
+        content: "{{ flag_content }}\n"
+        dest: "/home/{{ student_user }}/flag.txt"
+        owner: "{{ student_user }}"
+        group: "{{ student_user }}"
+        mode: '0600'
+
+    - name: Restrict student's home directory to the account owner only
+      ansible.builtin.file:
+        path: "/home/{{ student_user }}"
+        owner: "{{ student_user }}"
+        group: "{{ student_user }}"
+        mode: '0700'

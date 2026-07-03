@@ -1,0 +1,98 @@
+---
+# Game 2: Shellshock Vulnerability (CVE-2014-6271)
+#
+# Deploys Apache with mod_cgi, an intentionally vulnerable bash 4.3 build
+# (pre-dating the Shellshock patches) wired up as the interpreter for a CGI
+# script, and a flag file outside the webroot that is only reachable via
+# arbitrary command execution through the Shellshock bug.
+- name: Deploy Shellshock (CVE-2014-6271) scenario
+  hosts: cyberrange
+  vars:
+    vulnerable_bash_version: "4.3"
+    vulnerable_bash_url: "https://ftp.gnu.org/gnu/bash/bash-{{ vulnerable_bash_version }}.tar.gz"
+    build_dir: "/usr/src/bash-{{ vulnerable_bash_version }}"
+    vulnerable_bash_path: /usr/local/bin/bash-vulnerable
+    flag_content: "WMG{sh3llsh0ck_cve_2014_6271_env_vars_are_scary}"
+
+  tasks:
+    - name: Install Apache, CGI support, and build tools
+      ansible.builtin.apt:
+        name:
+          - apache2
+          - build-essential
+          - wget
+        state: present
+        update_cache: yes
+
+    - name: Download vulnerable bash source (pre-dates Shellshock patches)
+      ansible.builtin.get_url:
+        url: "{{ vulnerable_bash_url }}"
+        dest: "/usr/src/bash-{{ vulnerable_bash_version }}.tar.gz"
+      register: bash_download
+
+    - name: Extract vulnerable bash source
+      ansible.builtin.unarchive:
+        src: "/usr/src/bash-{{ vulnerable_bash_version }}.tar.gz"
+        dest: /usr/src
+        remote_src: yes
+        creates: "{{ build_dir }}/configure"
+
+    - name: Configure vulnerable bash build
+      ansible.builtin.command: ./configure
+      args:
+        chdir: "{{ build_dir }}"
+        creates: "{{ build_dir }}/Makefile"
+
+    - name: Compile vulnerable bash
+      ansible.builtin.command: make
+      args:
+        chdir: "{{ build_dir }}"
+        creates: "{{ build_dir }}/bash"
+
+    - name: Install the vulnerable bash binary under its own name
+      ansible.builtin.copy:
+        src: "{{ build_dir }}/bash"
+        dest: "{{ vulnerable_bash_path }}"
+        mode: '0755'
+        owner: root
+        group: root
+        remote_src: yes
+
+    - name: Enable Apache's CGI module
+      # Ubuntu's default MPM (mpm_event) is threaded and incompatible with
+      # mod_cgi, so a2enmod transparently substitutes mod_cgid instead —
+      # the enabled file is therefore cgid.load, not cgi.load.
+      ansible.builtin.command: a2enmod cgi
+      args:
+        creates: /etc/apache2/mods-enabled/cgid.load
+
+    - name: Enable the serve-cgi-bin configuration
+      ansible.builtin.command: a2enconf serve-cgi-bin
+      args:
+        creates: /etc/apache2/conf-enabled/serve-cgi-bin.conf
+
+    - name: Deploy the vulnerable CGI script
+      ansible.builtin.copy:
+        src: files/status.cgi
+        dest: /usr/lib/cgi-bin/status.cgi
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Plant the flag outside the webroot (readable by the Apache worker)
+      ansible.builtin.copy:
+        content: "{{ flag_content }}\n"
+        dest: /opt/flag.txt
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Check whether Apache is already running
+      ansible.builtin.command: pgrep -x apache2
+      register: apache_running
+      changed_when: false
+      failed_when: false
+
+    - name: Start Apache
+      ansible.builtin.command: apache2ctl start
+      when: apache_running.rc != 0
