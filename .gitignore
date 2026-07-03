@@ -1,0 +1,18 @@
+# Claude Code local settings / workspace
+.claude/
+
+# Local-only JSON (settings, secrets, machine-specific config)
+*.local.json
+
+# OS cruft
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Environment / secrets
+.env
+
+# Scratch / temporary files
+tmp/

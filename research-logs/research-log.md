@@ -625,3 +625,83 @@ poll: 0` is only as robust as the process it launches; a real daemon that
 double-forks survives infrastructure hiccups that a naive foreground
 script does not, but a detect-and-relaunch guard (already present here)
 makes that difference invisible to the end user.
+
+---
+
+## Entry 13 — 2026-07-03 13:04 (audit + remediation pass)
+
+**Action:** A senior-engineer audit was performed across the whole repository
+(structure, all three playbooks, every briefing/hints/solution, the dashboard,
+the research log, the README, and the live Docker/Ansible environment),
+followed by a remediation pass fixing the issues it surfaced.
+
+**Files modified:**
+- `.gitignore` (new)
+- `LICENSE` (new — MIT)
+- `dashboard/index.html` (Active Games stat fix)
+- `docs/index.html` (re-synced from dashboard)
+- `research-logs/research-log.md` (this entry)
+- `.git/config` (remote URL — credential removed; not tracked, local only)
+- `.claude/settings.local.json` (untracked via `git rm --cached`)
+
+**Audit findings (summary):**
+- All three games verified working end-to-end on the live container:
+  playbooks idempotent, all three flags retrievable. Flag SHA-256 hashes in
+  the dashboard confirmed correct.
+- **Critical — leaked credential:** a live GitHub Personal Access Token was
+  embedded in plaintext in the `origin` remote URL in `.git/config`
+  (`https://<user>:<ghp_token>@github.com/...`). This is the highest-severity
+  issue: any secret committed/stored like this must be treated as compromised.
+- **Port publishing mismatch:** the container published only `2222:22` to the
+  host, but the dashboard/hints tell students to hit `127.0.0.1:80` and
+  `127.0.0.1:8888`. Those services were only reachable via the attacker
+  container on the shared Docker network, not from the host as documented.
+- **Dashboard "Active Games" stat** was hardcoded to `3` in HTML and never
+  updated by JS, so it stayed at 3 even after a game was solved.
+- **Repo hygiene:** no `.gitignore`, no `LICENSE`; `.claude/settings.local.json`
+  (local tool state) was tracked; `docs/index.html` is a hand-maintained
+  byte-for-byte duplicate of `dashboard/index.html` with no sync step.
+
+**Fixes applied:**
+1. **PAT removed** from the git remote: reset `origin` to a token-less HTTPS
+   URL (`https://github.com/IBsandeshCT/wmg-cyberrange-internship.git`).
+   The token must still be **revoked** in GitHub settings — a removed-but-
+   already-exposed token is still compromised until revoked.
+2. **Port publishing fixed:** stopped and removed `cyberrange-target`, then
+   recreated it attached to `cyberrange-net` publishing `2222:22`, `80:80`,
+   `8080:8080`, `8888:8888`, `9090:9090` (`--cap-add=NET_ADMIN`). Re-ran all
+   three playbooks against the fresh container to restore state.
+3. **Active Games stat** now computed dynamically as `GAMES.length -
+   flagsCaptured` inside `updateStatsUI()` (added the DOM ref + the update),
+   so it decrements on solve and resets correctly.
+4. **`.gitignore` added** (ignores `.claude/`, `*.local.json`, `.DS_Store`,
+   `__pycache__`, `*.pyc`, `.env`, `tmp/`) and `.claude/settings.local.json`
+   untracked with `git rm --cached`.
+5. **`LICENSE` added** (MIT, Sandesh Chhetri, 2026).
+6. **Single source of truth:** `docs/index.html` is regenerated from
+   `dashboard/index.html` via `cp` after any dashboard change.
+
+**Verification:** After recreating the container and re-running all three
+playbooks, all three flags were retrieved **directly from the host** (not just
+the attacker container):
+```
+127.0.0.1:2222 (ssh, student/password123)         -> WMG{ssh_w3ak_p4ssw0rds_are_never_ok}
+http://127.0.0.1/cgi-bin/status.cgi (shellshock)  -> WMG{sh3llsh0ck_cve_2014_6271_env_vars_are_scary}
+127.0.0.1:8888 (nc, banner service)               -> WMG{r3c0n_1s_m0r3_th4n_just_p0rt_sc4nning}
+```
+
+**Error / gotcha discovered:** During remediation, an isolated git worktree
+created on this Windows+WSL2 host was checked out by the Windows-side git with
+`autocrlf` converting every text file to CRLF. Provisioning `status.cgi` from
+that worktree gave it a `#!/usr/local/bin/bash-vulnerable\r` shebang, so
+Apache's `mod_cgid` failed to exec it (`AH01241: exec ... No such file or
+directory` / "End of script output before headers") and the Shellshock
+endpoint returned HTTP 500. The committed repository is unaffected
+(`git ls-files --eol` shows `i/lf w/lf`); the fix was to re-provision from the
+LF main checkout. **Lesson:** on Windows+WSL, always provision the target from
+the native-Linux (LF) checkout, and consider adding a `.gitattributes` pinning
+`*.cgi`, `*.py`, `*.j2`, `*.sh` to `eol=lf` so a Windows checkout can never
+corrupt shipped scripts.
+
+**Human intervention required:** No (audit and fixes performed autonomously);
+the token revocation in GitHub's UI is left to the repository owner.

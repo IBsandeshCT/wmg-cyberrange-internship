@@ -1214,6 +1214,7 @@
      ========================================================== */
   var dom = {
     clock: document.getElementById("liveClock"),
+    statActiveGames: document.getElementById("statActiveGames"),
     statFlagsCaptured: document.getElementById("statFlagsCaptured"),
     statCompletionPct: document.getElementById("statCompletionPct"),
     statCompletionBar: document.getElementById("statCompletionBar"),
@@ -1356,6 +1357,7 @@
      ========================================================== */
   function updateStatsUI() {
     var completionPct = Math.round((state.flagsCaptured / GAMES.length) * 100);
+    dom.statActiveGames.textContent = GAMES.length - state.flagsCaptured;
     dom.statFlagsCaptured.textContent = state.flagsCaptured;
     dom.statCompletionPct.textContent = completionPct + "%";
     dom.statCompletionBar.style.width = completionPct + "%";
