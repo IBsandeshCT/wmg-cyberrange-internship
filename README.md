@@ -11,16 +11,16 @@ down and rebuilt from source at any time.
 
 Each vulnerability is packaged as a self-contained **game** under `games/`,
 with a student-facing briefing, a set of progressive hints, and a full
-instructor solution guide — so the same repository can be used both for
+instructor solution guide so the same repository can be used both for
 self-directed practice and for supervised teaching sessions.
 
 The three games currently implemented:
 
-1. **SSH Weak Password Attack** — dictionary/brute-force attacks against a
+1. **SSH Weak Password Attack** : dictionary/brute-force attacks against a
    weak account password.
-2. **Shellshock (CVE-2014-6271)** — a real, historically accurate remote
+2. **Shellshock (CVE-2014-6271)** : a real, historically accurate remote
    code execution bug in `bash`, exploited through a CGI script.
-3. **Network Reconnaissance** — enumerating multiple open services and
+3. **Network Reconnaissance** : enumerating multiple open services and
    telling real leads apart from decoys.
 
 ## Architecture
@@ -103,7 +103,7 @@ wmg-cyberrange-internship/
   - `sshpass` (for password-based SSH testing/verification)
   - `git` (optional, if you clone rather than copy this repo)
 
-You do **not** need `hydra` or `nmap` installed on the host — both are
+You do **not** need `hydra` or `nmap` installed on the host : both are
 provided via the `cyberrange-attacker` Docker image (see below), so no
 `sudo`/host package installs are required to run or verify the games.
 
@@ -166,7 +166,7 @@ target ansible_host=127.0.0.1 ansible_port=2222 ansible_user=root ansible_passwo
 
 Notes:
 - `ansible_password=root` matches the root password baked into
-  `docker/Dockerfile.target` — this is a local, disposable training
+  `docker/Dockerfile.target` : this is a local, disposable training
   container, not a production credential.
 - `UserKnownHostsFile=/dev/null` is required because the container
   generates a new SSH host key on every rebuild; without it, SSH refuses
@@ -181,12 +181,12 @@ Each game is a single, standalone playbook (`games/<game>/setup.yml`) that
 targets the `cyberrange` group defined in the inventory. Playbooks are
 designed to be:
 
-- **Idempotent** — safe to re-run any number of times; a second run always
+- **Idempotent** : safe to re-run any number of times; a second run always
   reports `changed=0` for that game.
-- **Independent** — each game installs everything it needs itself (even if
+- **Independent** : each game installs everything it needs itself (even if
   another game already installed the same package, e.g. `apache2`), so any
   single game can be run on its own.
-- **Composable** — all three can run against the same target container
+- **Composable** : all three can run against the same target container
   without conflicting (verified in research log Entry 11).
 
 Test connectivity at any time with:
@@ -209,7 +209,7 @@ with exact commands and expected output.
 
 ### Expected outputs
 
-**Game 1 — SSH Weak Password Attack**
+**Game 1 : SSH Weak Password Attack**
 ```
 ansible-playbook ... -> ok=7 changed=4 failed=0   (first run)
 ansible-playbook ... -> ok=7 changed=0 failed=0   (re-run)
@@ -219,7 +219,7 @@ ssh -p 2222 student@127.0.0.1 'cat flag.txt'
   -> WMG{ssh_w3ak_p4ssw0rds_are_never_ok}
 ```
 
-**Game 2 — Shellshock (CVE-2014-6271)**
+**Game 2 : Shellshock (CVE-2014-6271)**
 ```
 ansible-playbook ... -> ok=13 changed=10 failed=0   (first run)
 ansible-playbook ... -> ok=11 changed=0 failed=0    (re-run)
@@ -228,7 +228,7 @@ curl -H 'User-Agent: () { :; }; echo; echo; /bin/cat /opt/flag.txt' \
   -> WMG{sh3llsh0ck_cve_2014_6271_env_vars_are_scary}
 ```
 
-**Game 3 — Network Reconnaissance**
+**Game 3 : Network Reconnaissance**
 ```
 ansible-playbook ... -> ok=15 changed=10 failed=0 ignored=1   (first run)
 ansible-playbook ... -> ok=13 changed=0 failed=0 skipped=4    (re-run)
@@ -262,27 +262,27 @@ docker run --rm --network cyberrange-net \
 | `ansible ... -m ping` fails with `Ansible requires Python 3.9 or newer` | Same as above | Same as above |
 | SSH connection fails with `WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!` | Container was rebuilt (new SSH host key) and the old key is cached | Ensure `inventory/hosts.ini` has `-o UserKnownHostsFile=/dev/null` in `ansible_ssh_common_args` |
 | A `command`/`shell` task in a playbook hangs forever | The command doesn't self-daemonize (e.g. `vsftpd` on this image runs in the foreground) | Use `async: 86400, poll: 0` to launch it fire-and-forget, as done in `games/network-recon/setup.yml` |
-| Anonymous FTP connects but every transfer fails | `secure_chroot_dir` (`/var/run/vsftpd/empty`) doesn't exist — normally created by `systemd-tmpfiles` at boot, which never runs in this container | Ensure the directory is created explicitly (already handled in `games/network-recon/setup.yml`) |
+| Anonymous FTP connects but every transfer fails | `secure_chroot_dir` (`/var/run/vsftpd/empty`) doesn't exist : normally created by `systemd-tmpfiles` at boot, which never runs in this container | Ensure the directory is created explicitly (already handled in `games/network-recon/setup.yml`) |
 | A `command` task with `creates:` re-runs every time despite the target existing | The actual file created doesn't match the assumed name (e.g. `a2enmod cgi` creates `cgid.load`, not `cgi.load`, under a threaded MPM) | Check what the command actually created with `ls` before writing the `creates:` guard |
-| `sudo` fails with "interactive authentication is required" | No passwordless sudo configured for the current shell/session | Avoid host-level installs entirely — use the `cyberrange-attacker` container instead |
+| `sudo` fails with "interactive authentication is required" | No passwordless sudo configured for the current shell/session | Avoid host-level installs entirely : use the `cyberrange-attacker` container instead |
 
 ## Learning Objectives
 
-**Game 1 — SSH Weak Password Attack**
+**Game 1 : SSH Weak Password Attack**
 - Understand why password strength and account lockout policies matter.
 - Practice using `hydra` for credential brute-forcing against a real
   service.
 - Recognize that file permissions, not obscurity, are what actually
   protects data after a compromise.
 
-**Game 2 — Shellshock (CVE-2014-6271)**
+**Game 2 : Shellshock (CVE-2014-6271)**
 - Understand how CGI exposes HTTP headers as environment variables, and
   why that's dangerous when the interpreter has a parsing bug.
 - Practice crafting an HTTP header-based exploit with `curl`.
 - Understand the real-world lesson: patching the OS isn't enough if a
   legacy script is pinned to an old, unpatched interpreter.
 
-**Game 3 — Network Reconnaissance**
+**Game 3 : Network Reconnaissance**
 - Practice comprehensive port scanning (not just default top-N ports).
 - Practice service/version fingerprinting with `nmap -sV`.
 - Build the judgment to distinguish real leads from decoys rather than
