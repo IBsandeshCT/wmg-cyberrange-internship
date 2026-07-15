@@ -705,3 +705,348 @@ corrupt shipped scripts.
 
 **Human intervention required:** No (audit and fixes performed autonomously);
 the token revocation in GitHub's UI is left to the repository owner.
+
+---
+
+# Week 2 Progress (2026-07-09 – 2026-07-15)
+
+Week 2 moved the project from "three games that work locally" to "games whose
+correctness is proved by machine, plus the beginnings of CyberRangeCZ porting
+and an autonomous generate-and-verify loop." Every claim below is taken from
+Git history, the files on disk, `research-logs/verification-log.md`, or the
+`agent-harness/state/*.json` run record. Where the platform-side outcome could
+not be confirmed from repository evidence, it is marked as such rather than
+assumed.
+
+---
+
+## Entry 14 — 2026-07-15 18:08
+
+**Timestamp:** 2026-07-15 18:08 (commit `430b076`, this repo).
+
+**Action Taken:** Built an autonomous self-verification harness under
+`agent-harness/` so a game is only "done" when a real deployment plus a real
+exploit retrieves the exact expected flag.
+
+**Files Modified:**
+- `agent-harness/verify.sh` (verify ONE game end-to-end)
+- `agent-harness/verify-all.sh` (discover & verify every game, suite summary)
+- `agent-harness/lib.sh` (shared logging / dep-check / path resolution)
+- `agent-harness/exploits/{ssh-weak-password,shellshock,network-recon}.exploit`
+- `agent-harness/README.md`, `agent-harness/claude-generate-and-verify.md`
+
+**Commands Executed:**
+```
+git log --oneline -20
+ls agent-harness/
+ls agent-harness/exploits/
+```
+
+**Result:** All files confirmed present on disk and committed in `430b076`.
+Exit-code contract (read from `verify.sh` and documented in the README):
+`0` = full PASS (deploy OK + exploit succeeded + flag matched), `1` =
+verification FAIL, `2` = usage error / unknown game / missing exploit
+definition (the "UNKNOWN" case), `3` = missing dependency, `130` = interrupted.
+PASS is decided by the exploit's **exit code** AND a byte-for-byte flag match,
+never by string-matching alone.
+
+**Error:** None.
+
+**Root Cause:** N/A.
+
+**Fix Applied:** N/A.
+
+**Verification:** `ls agent-harness/` lists all scripts; `git log` shows commit
+`430b076`; the exit codes are the ones implemented in `verify.sh`.
+
+**Human Intervention Required:** No.
+
+**Lessons Learned:** An LLM will state success with equal confidence whether or
+not the artifact works. Moving the definition of "done" to an exit code from a
+real deployment removes the model's self-report from the trust path.
+
+---
+
+## Entry 15 — 2026-07-15 (verification runs 17:53 – 21:32)
+
+**Timestamp:** First run 2026-07-15 17:53:37; last run 2026-07-15 21:32:43
+(from `research-logs/verification-log.md`).
+
+**Action Taken:** Ran the harness against every game and recorded each run as an
+immutable evidence-log entry.
+
+**Files Modified:** `research-logs/verification-log.md` (append-only).
+
+**Commands Executed:**
+```
+./agent-harness/verify.sh ssh-weak-password
+./agent-harness/verify.sh shellshock
+./agent-harness/verify.sh network-recon
+./agent-harness/verify.sh ftp-anon
+```
+
+**Result:** Four games tested — SSH Weak Password, Shellshock (CVE-2014-6271),
+Network Reconnaissance, and Anonymous FTP Access. Latest result per game is
+PASS with the correct flag retrieved. Representative PASS timestamps:
+SSH 18:06:29, Shellshock 18:06:15, Network Recon 21:07:04, Anonymous FTP
+21:32:43. Two SSH runs FAILed earlier (18:00:04 and 18:03:16, exploit rc=255)
+before the next run PASSed at 18:03:22.
+
+**Error:** Two SSH Weak Password runs recorded `Exploit: FAIL (rc=255)`.
+
+**Root Cause:** Status: Not verified from repository evidence. The log records
+`rc=255` (the SSH client's connect/auth-failure code) but not the underlying
+reason; the immediately following PASS suggests a transient condition (e.g. the
+account/target not yet ready), which the log does not prove.
+
+**Fix Applied:** None applied to the game; the subsequent run at 18:03:22
+PASSed, and later SSH runs (18:06:29) also PASSed.
+
+**Verification:** All outcomes are the recorded entries in
+`verification-log.md`, including the two failures — they were kept, not
+overwritten.
+
+**Human Intervention Required:** No (every logged entry shows
+`Human Intervention: No`).
+
+**Lessons Learned:** Because the harness judges by exit code, it recorded real
+failures instead of rounding them up to PASS — and keeping the failures in the
+append-only log is what makes the audit trail trustworthy.
+
+---
+
+## Entry 16 — 2026-07-15 19:54 – 19:55
+
+**Timestamp:** `wmg-ssh-cyberrange` fix 2026-07-15 19:54; `wmg-shellshock-cyberrange`
+fix 2026-07-15 19:55.
+
+**Action Taken:** Removed the unnecessary Kali package-provisioning tasks from
+the attacker role in the two ported CyberRangeCZ repositories.
+
+**Files Modified:**
+- `~/wmg-ssh-cyberrange/provisioning/roles/attacker/tasks/main.yml` (commit `22a47e7`)
+- `~/wmg-shellshock-cyberrange/provisioning/roles/attacker/tasks/main.yml` (commit `cc656ce`)
+
+(Both are sibling repositories outside this repo; confirmed via their own Git
+history.)
+
+**Commands Executed:**
+```
+git -C ~/wmg-ssh-cyberrange log --oneline
+git -C ~/wmg-ssh-cyberrange show 22a47e7
+git -C ~/wmg-shellshock-cyberrange log --oneline
+```
+
+**Result:** The `apt` install of `hydra` (with `update_cache: yes`) and the
+wordlist-copy task were removed from the SSH attacker role and replaced with a
+single `ansible.builtin.ping` reachability check (diff: 5 insertions, 14
+deletions). The Shellshock repo received the equivalent fix.
+
+**Error:** The original attacker role ran `apt` tasks that would fail on the
+CyberRangeCZ platform.
+
+**Root Cause:** Confirmed from the commit's own comments and diff: the Kali box
+already ships `hydra`, `nmap`, `ssh`, and `sshpass`, and CyberRangeCZ has **no
+internet access during provisioning**, so `apt ... update_cache: yes` cannot
+reach a mirror and the play errors out.
+
+**Fix Applied:** Deleted the `apt` and wordlist tasks; the attacker role now
+only confirms the host is reachable.
+
+**Verification:** `git show 22a47e7` shows the removed tasks and the new comment
+("Kali ships with hydra, nmap, ssh and sshpass pre-installed. Internet access is
+unavailable during CyberRangeCZ provisioning.").
+
+**Human Intervention Required:** No.
+
+**Lessons Learned:** Patterns proven against an internet-connected local Docker
+target do not transfer blindly to an offline range. Provisioning must assume no
+package mirror and rely on what the base image already contains.
+
+---
+
+## Entry 17 — 2026-07-15 21:08
+
+**Timestamp:** 2026-07-15 21:08 (`wmg-network-recon-cyberrange` commit `c61b0e6`).
+
+**Action Taken:** Converted the Network Reconnaissance game to the CyberRangeCZ
+deployment shape (`topology.yml` + `training.json` + role-based
+`provisioning/`).
+
+**Files Modified (created in `~/wmg-network-recon-cyberrange`):**
+- `topology.yml`
+- `training.json`
+- `provisioning/playbook.yml`
+- `provisioning/roles/attacker/tasks/`
+- `provisioning/roles/server/{tasks,vars,handlers,files}/`
+- `README.md`
+
+**Commands Executed:**
+```
+git -C ~/wmg-network-recon-cyberrange log --oneline
+ls ~/wmg-network-recon-cyberrange
+find ~/wmg-network-recon-cyberrange/provisioning -maxdepth 3 -type d
+```
+
+**Result:** All three CyberRangeCZ artifacts confirmed present
+(`topology.yml`, `training.json`, `provisioning/playbook.yml`) with separate
+`attacker` and `server` roles.
+
+**Error:** None observed in the repository.
+
+**Root Cause:** N/A.
+
+**Fix Applied:** N/A.
+
+**Verification:** The local `network-recon` game (this repo's `setup.yml` shape)
+is verified PASS end-to-end by the harness (e.g. `verification-log.md`
+21:07:04). Deployment of the **converted CyberRangeCZ repo on the actual KYPO
+platform** — including pool provisioning — Status: Not verified from repository
+evidence. `verify.sh` exercises the local `setup.yml` shape, not the
+`topology.yml`/`training.json` platform deployment.
+
+**Human Intervention Required:** No.
+
+**Lessons Learned:** Build and prove a game in the local Docker shape first,
+then port; the port itself still needs its own verification path, because a
+green local run does not prove the platform-side deployment.
+
+---
+
+## Entry 18 — 2026-07-15
+
+**Timestamp:** CyberRangeCZ format conversions dated 2026-07-09
+(`wmg-ssh-cyberrange` `b41a90a` 10:47; `wmg-shellshock-cyberrange` `f37c2b7`
+12:13); Kali-role fixes applied 2026-07-15 (see Entry 16).
+
+**Action Taken:** Reviewed the CyberRangeCZ deployment status of the SSH and
+Shellshock games.
+
+**Files Modified:** None (review only).
+
+**Commands Executed:**
+```
+ls ~/wmg-ssh-cyberrange ~/wmg-shellshock-cyberrange
+git -C ~/wmg-ssh-cyberrange log --oneline
+git -C ~/wmg-shellshock-cyberrange log --oneline
+```
+
+**Result:** Both games exist in CyberRangeCZ format as dedicated repos
+(`wmg-ssh-cyberrange`, `wmg-shellshock-cyberrange`), each carrying
+`topology.yml`, `training.json`, and a role-based `provisioning/` tree, and each
+now carrying the Kali-role fix from Entry 16.
+
+**Error:** None.
+
+**Root Cause:** N/A.
+
+**Fix Applied:** N/A.
+
+**Verification:** Repository existence and structure confirmed via `git log`.
+**Actual deployment onto the CyberRangeCZ (KYPO) platform and pool provisioning
+results — Status: Not verified from repository evidence.** No deployment logs,
+pool identifiers, or provisioning output exist in the repositories to confirm a
+live platform deployment; only the deployable source artifacts are present.
+
+**Human Intervention Required:** No.
+
+**Lessons Learned:** "In CyberRangeCZ format" and "deployed to CyberRangeCZ" are
+different claims. Without platform-side logs, only the former is provable from
+the repository.
+
+---
+
+## Entry 19 — 2026-07-15 21:34
+
+**Timestamp:** 2026-07-15 21:34 (commit `a9e1063`, this repo).
+
+**Action Taken:** Added an autonomous Generate → Deploy → Verify → Repair →
+Repeat orchestrator on top of the harness, plus reusable instructor prompt
+templates.
+
+**Files Modified:**
+- `agent-harness/generate-and-verify.sh`
+- `agent-harness/prompts/new-game-template.txt`
+- `agent-harness/prompts/example-ftp-anon.txt`
+- `agent-harness/state/` and `agent-harness/logs/` (per-run JSON state + logs)
+- `research-logs/generate-verify-log.md` (append-only)
+
+**Commands Executed:**
+```
+ls agent-harness/
+ls agent-harness/prompts/
+cat agent-harness/state/ftp-anon-20260715-213233.json
+```
+
+**Result:** Orchestrator and both prompt templates confirmed present and
+committed in `a9e1063`. The loop reads a vulnerability brief, validates
+generated artifacts (YAML + JSON + `ansible-playbook --syntax-check`), deploys,
+runs `verify.sh`, and on FAIL feeds the full logs back as a repair prompt — up
+to a configurable max of 5 iterations; success is defined as `verify.sh`
+exit `0`.
+
+**Error:** None.
+
+**Root Cause:** N/A.
+
+**Fix Applied:** N/A.
+
+**Verification:** Files exist (`ls`) and are committed (`git log a9e1063`). The
+loop was exercised over the `ftp-anon` game in `SKIP_GENERATE=1` mode (validate
+→ deploy → verify), producing `agent-harness/state/ftp-anon-20260715-213233.json`
+with `final_result: PASS` on iteration 1. Note for honesty: that run used the
+already-authored files (`SKIP_GENERATE=1`); a live end-to-end Claude
+*generation* iteration was not executed as part of this record.
+
+**Human Intervention Required:** No.
+
+**Lessons Learned:** The value of a generation loop is entirely in its gate. By
+making `verify.sh` exit `0` the only exit condition, the loop cannot terminate
+on a plausible-but-broken game.
+
+---
+
+## Entry 20 — 2026-07-15 21:28 – 21:32
+
+**Timestamp:** Verified runs at 2026-07-15 21:28:13, 21:28:43, and 21:32:43
+(from `verification-log.md`); state record started 21:32:33.
+
+**Action Taken:** Authored a new demonstration game, `ftp-anon` (anonymous FTP
+access), and verified it end-to-end.
+
+**Files Modified:**
+- `games/ftp-anon/setup.yml`
+- `games/ftp-anon/files/vsftpd.conf`
+- `agent-harness/exploits/ftp-anon.exploit`
+
+**Commands Executed:**
+```
+./agent-harness/verify.sh ftp-anon
+curl -s ftp://127.0.0.1/pub/flag.txt        # the exploit's real attack
+```
+(The exploit file runs `curl -s --fail ... ftp://127.0.0.1:21/pub/flag.txt`.)
+
+**Result:** Verification PASS. Flag `WMG{anon_ftp_1s_a_s3curity_r1sk}` retrieved
+over anonymous FTP. First deploy `ok=10 changed=7 failed=0`; a second deploy was
+idempotent (`changed=0`) and still PASSed. The run-state file records
+`final_result: PASS`, `final_iteration: 1`, `verify_rc: 0`.
+
+**Error:** None in the final result.
+
+**Root Cause:** N/A. (Deployment note: to make the FTP data channel survive
+Docker port publishing, the game pins a passive-port range and `pasv_address`;
+the target container must publish port 21 and that range. This container
+port-publishing step is an environment action, not a repository artifact.)
+
+**Fix Applied:** N/A.
+
+**Verification:** Three PASS entries in `verification-log.md` for "Anonymous FTP
+Access" plus the `agent-harness/state/ftp-anon-20260715-213233.json` PASS
+record; the flag string matches byte-for-byte.
+
+**Human Intervention Required:** No.
+
+**Lessons Learned:** A vulnerability class as simple as anonymous FTP still hides
+an environment trap (passive-mode data ports through NAT); the end-to-end
+verification — not the playbook reading — is what proved the flag was actually
+retrievable.
