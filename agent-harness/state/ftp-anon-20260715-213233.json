@@ -1,0 +1,30 @@
+{
+  "game": "ftp-anon",
+  "prompt_file": "/home/sandesh/wmg-cyberrange-internship/agent-harness/prompts/example-ftp-anon.txt",
+  "started": "2026-07-15 21:32:33",
+  "max_iterations": 5,
+  "final_result": "PASS",
+  "final_iteration": 1,
+  "iterations": [
+    {
+      "iteration": 1,
+      "timestamp": "2026-07-15 21:32:34",
+      "files": [
+        "games/ftp-anon/setup.yml",
+        "agent-harness/exploits/ftp-anon.exploit",
+        "games/ftp-anon/files/vsftpd.conf"
+      ],
+      "generate_rc": 0,
+      "syntax_check_rc": 0,
+      "syntax_check_output": "YAML OK: games/ftp-anon/setup.yml\nJSON: none present (local setup.yml game)\nEXPLOIT SYNTAX OK: agent-harness/exploits/ftp-anon.exploit\n\nplaybook: /home/sandesh/wmg-cyberrange-internship/games/ftp-anon/setup.yml\nANSIBLE SYNTAX-CHECK OK",
+      "deploy_rc": 0,
+      "deploy_ok": 9,
+      "deploy_changed": 0,
+      "deploy_failed": 0,
+      "verify_rc": 0,
+      "runtime_seconds": 18.1,
+      "verdict": "PASS",
+      "repair_summary": "None \u2014 verification passed."
+    }
+  ]
+}

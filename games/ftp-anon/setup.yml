@@ -1,0 +1,96 @@
+---
+# Game: Anonymous FTP Access
+#
+# Deploys vsftpd configured to allow anonymous (unauthenticated) login and
+# exposes a sensitive flag file under the anonymous FTP root. The flag is only
+# reachable by actually connecting to the FTP service as the anonymous user and
+# downloading it — there is no shell access and writes are disabled, so the
+# exercise teaches that a misconfigured FTP server leaks files to anyone.
+#
+# Follows the container-safe patterns proven by games/network-recon: vsftpd is
+# launched fire-and-forget (no systemd), its secure chroot dir is created
+# explicitly, and it is only (re)started when its config actually changed.
+- name: Deploy Anonymous FTP Access scenario
+  hosts: cyberrange
+  vars:
+    ftp_root: /var/ftp
+    flag_content: "WMG{anon_ftp_1s_a_s3curity_r1sk}"
+
+  tasks:
+    - name: Install vsftpd
+      ansible.builtin.apt:
+        name: vsftpd
+        state: present
+        update_cache: yes
+
+    - name: Deploy the (intentionally misconfigured) vsftpd configuration
+      ansible.builtin.copy:
+        src: files/vsftpd.conf
+        dest: /etc/vsftpd.conf
+        owner: root
+        group: root
+        mode: '0644'
+      register: vsftpd_conf
+
+    - name: Ensure vsftpd's secure chroot jail directory exists
+      # Normally created by systemd-tmpfiles at boot; this container has no
+      # systemd, so without it vsftpd starts but every session fails.
+      ansible.builtin.file:
+        path: /var/run/vsftpd/empty
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Create the anonymous FTP root (owned by root, not writable by ftp)
+      # vsftpd refuses to chroot into a directory the login user can write to,
+      # so the anon root must be root-owned and non-writable by 'ftp'.
+      ansible.builtin.file:
+        path: "{{ ftp_root }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Create the public sub-directory served to anonymous users
+      ansible.builtin.file:
+        path: "{{ ftp_root }}/pub"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Plant the flag in the public FTP directory (world-readable)
+      ansible.builtin.copy:
+        content: "{{ flag_content }}\n"
+        dest: "{{ ftp_root }}/pub/flag.txt"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Check whether vsftpd is already running
+      ansible.builtin.command: pgrep -x vsftpd
+      register: vsftpd_running
+      changed_when: false
+      failed_when: false
+
+    - name: Stop vsftpd so it can be restarted with the new configuration
+      ansible.builtin.command: pkill -x vsftpd
+      when: vsftpd_conf.changed and vsftpd_running.rc == 0
+      changed_when: true
+
+    - name: Start vsftpd in standalone/foreground mode
+      # vsftpd on this image does not self-daemonize when launched by hand, so
+      # it is started fire-and-forget. Relaunched only if it was not already
+      # running, or if the config just changed (and was therefore killed above).
+      ansible.builtin.command: vsftpd /etc/vsftpd.conf
+      async: 86400
+      poll: 0
+      when: vsftpd_running.rc != 0 or vsftpd_conf.changed
+      changed_when: true
+
+    - name: Wait for the FTP control port to accept connections
+      ansible.builtin.wait_for:
+        port: 21
+        host: 127.0.0.1
+        timeout: 15
