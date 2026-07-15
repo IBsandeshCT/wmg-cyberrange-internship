@@ -148,3 +148,47 @@ a live deployment rather than assumed to work.
 - **Duration:** 5.6 seconds
 - **Human Intervention:** No
 - **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-15 21:07:04
+
+- **Game:** Network Reconnaissance
+- **Deployment:** OK (ok=13 changed=0 failed=0 unreachable=0 skipped=4 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 14.2 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-15 21:28:13
+
+- **Game:** Anonymous FTP Access
+- **Deployment:** OK (ok=10 changed=7 failed=0 unreachable=0 skipped=1 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 18.5 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-15 21:28:43
+
+- **Game:** Anonymous FTP Access
+- **Deployment:** OK (ok=9 changed=0 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 8.4 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-15 21:32:43
+
+- **Game:** Anonymous FTP Access
+- **Deployment:** OK (ok=9 changed=0 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 8.3 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.

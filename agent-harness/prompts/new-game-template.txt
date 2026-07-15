@@ -1,0 +1,19 @@
+VULNERABILITY_NAME: {{VULNERABILITY_NAME}}
+CVE: {{CVE_OR_NA}}
+LEARNING_OBJECTIVE: {{LEARNING_OBJECTIVE}}
+DIFFICULTY: {{DIFFICULTY}}
+TOOLS_STUDENT_USES: {{TOOLS}}
+FLAG_VALUE: {{FLAG_VALUE}}
+EXPLOIT_COMMAND: {{EXPLOIT_COMMAND_TO_VERIFY}}
+EXPECTED_OUTPUT: {{EXPECTED_FLAG_IN_OUTPUT}}
+
+TARGET_HOST: 127.0.0.1
+SSH_PORT: 2222
+INVENTORY: ~/wmg-cyberrange-internship/inventory/hosts.ini
+
+GAME_REQUIREMENTS:
+- Idempotent Ansible playbook
+- Flag only accessible after successful exploitation
+- No apt tasks on attacker (Kali has all tools pre-installed)
+- Uses ansible.builtin modules not shell commands where possible
+- Playbook must pass ansible-playbook --syntax-check before deployment

@@ -16,3 +16,11 @@ __pycache__/
 
 # Scratch / temporary files
 tmp/
+_*.sh
+_*.out
+
+# Agent-harness per-run artifacts (the directories are kept via .gitkeep;
+# individual run logs are ephemeral. A representative state JSON is committed
+# as evidence, but future per-run files are ignored.)
+agent-harness/logs/*
+!agent-harness/logs/.gitkeep

@@ -1,0 +1,20 @@
+VULNERABILITY_NAME: Anonymous FTP Access
+CVE: N/A
+LEARNING_OBJECTIVE: Understand how misconfigured FTP servers expose sensitive files to unauthenticated users
+DIFFICULTY: beginner
+TOOLS_STUDENT_USES: ftp, curl, nmap
+FLAG_VALUE: WMG{anon_ftp_1s_a_s3curity_r1sk}
+EXPLOIT_COMMAND: curl -s ftp://127.0.0.1/pub/flag.txt
+EXPECTED_OUTPUT: WMG{anon_ftp_1s_a_s3curity_r1sk}
+
+TARGET_HOST: 127.0.0.1
+SSH_PORT: 2222
+INVENTORY: ~/wmg-cyberrange-internship/inventory/hosts.ini
+
+GAME_REQUIREMENTS:
+- Install vsftpd
+- Enable anonymous FTP login
+- Place flag at /var/ftp/pub/flag.txt
+- Flag readable by anonymous FTP user
+- No password required
+- Idempotent playbook
