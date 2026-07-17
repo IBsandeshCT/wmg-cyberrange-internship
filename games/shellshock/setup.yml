@@ -96,3 +96,8 @@
     - name: Start Apache
       ansible.builtin.command: apache2ctl start
       when: apache_running.rc != 0
+
+    - name: Restart Apache to apply CGI configuration
+      ansible.builtin.service:
+        name: apache2
+        state: restarted

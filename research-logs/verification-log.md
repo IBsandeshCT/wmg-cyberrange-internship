@@ -192,3 +192,443 @@ a live deployment rather than assumed to work.
 - **Duration:** 8.3 seconds
 - **Human Intervention:** No
 - **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 10:55:31
+
+- **Game:** Anonymous FTP Access
+- **Deployment:** FAIL (ok=0 changed=0 failed=0 unreachable=1 skipped=0 rescued=0 ignored=0)
+- **Exploit:** FAIL
+- **Flag Retrieved:** No
+- **Verification:** FAIL
+- **Duration:** 0.9 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment: FAIL. Exploit: FAIL (rc=1). Flag retrieved: No.
+
+## 2026-07-17 10:55:32
+
+- **Game:** Network Reconnaissance
+- **Deployment:** FAIL (ok=0 changed=0 failed=0 unreachable=1 skipped=0 rescued=0 ignored=0)
+- **Exploit:** FAIL
+- **Flag Retrieved:** No
+- **Verification:** FAIL
+- **Duration:** 0.6 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment: FAIL. Exploit: FAIL (rc=1). Flag retrieved: No.
+
+## 2026-07-17 10:55:33
+
+- **Game:** Shellshock (CVE-2014-6271)
+- **Deployment:** FAIL (ok=0 changed=0 failed=0 unreachable=1 skipped=0 rescued=0 ignored=0)
+- **Exploit:** FAIL
+- **Flag Retrieved:** No
+- **Verification:** FAIL
+- **Duration:** 0.6 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment: FAIL. Exploit: FAIL (rc=1). Flag retrieved: No.
+
+## 2026-07-17 10:55:33
+
+- **Game:** SSH Weak Password
+- **Deployment:** FAIL (ok=0 changed=0 failed=0 unreachable=1 skipped=0 rescued=0 ignored=0)
+- **Exploit:** FAIL
+- **Flag Retrieved:** No
+- **Verification:** FAIL
+- **Duration:** 0.6 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment: FAIL. Exploit: FAIL (rc=1). Flag retrieved: No.
+
+## 2026-07-17 10:56:56
+
+- **Game:** Anonymous FTP Access
+- **Deployment:** OK (ok=10 changed=1 failed=0 unreachable=0 skipped=1 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 10.3 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 10:57:06
+
+- **Game:** Network Reconnaissance
+- **Deployment:** OK (ok=15 changed=6 failed=0 unreachable=0 skipped=2 rescued=0 ignored=1)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 25.7 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 10:57:32
+
+- **Game:** Shellshock (CVE-2014-6271)
+- **Deployment:** OK (ok=12 changed=9 failed=0 unreachable=0 skipped=1 rescued=0 ignored=0)
+- **Exploit:** FAIL
+- **Flag Retrieved:** No
+- **Verification:** FAIL
+- **Duration:** 66.1 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment: OK. Exploit: FAIL (rc=22). Flag retrieved: No.
+
+## 2026-07-17 10:58:38
+
+- **Game:** SSH Weak Password
+- **Deployment:** OK (ok=7 changed=4 failed=0 unreachable=0 skipped=0 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 4.0 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:00:20
+
+- **Game:** Anonymous FTP Access
+- **Deployment:** OK (ok=9 changed=0 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 8.8 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:00:29
+
+- **Game:** Network Reconnaissance
+- **Deployment:** OK (ok=13 changed=0 failed=0 unreachable=0 skipped=4 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 13.8 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:00:43
+
+- **Game:** Shellshock (CVE-2014-6271)
+- **Deployment:** OK (ok=11 changed=0 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** FAIL
+- **Flag Retrieved:** No
+- **Verification:** FAIL
+- **Duration:** 9.2 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment: OK. Exploit: FAIL (rc=22). Flag retrieved: No.
+
+## 2026-07-17 11:00:52
+
+- **Game:** SSH Weak Password
+- **Deployment:** OK (ok=7 changed=0 failed=0 unreachable=0 skipped=0 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 3.8 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:02:28
+
+- **Game:** Anonymous FTP Access
+- **Deployment:** OK (ok=9 changed=0 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 7.9 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:02:36
+
+- **Game:** Network Reconnaissance
+- **Deployment:** OK (ok=13 changed=0 failed=0 unreachable=0 skipped=4 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 12.4 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:02:49
+
+- **Game:** Shellshock (CVE-2014-6271)
+- **Deployment:** OK (ok=11 changed=0 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** FAIL
+- **Flag Retrieved:** No
+- **Verification:** FAIL
+- **Duration:** 8.8 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment: OK. Exploit: FAIL (rc=22). Flag retrieved: No.
+
+## 2026-07-17 11:02:57
+
+- **Game:** SSH Weak Password
+- **Deployment:** OK (ok=7 changed=0 failed=0 unreachable=0 skipped=0 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 3.8 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:06:07
+
+- **Game:** Anonymous FTP Access
+- **Deployment:** OK (ok=9 changed=0 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 7.7 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:06:14
+
+- **Game:** Network Reconnaissance
+- **Deployment:** OK (ok=13 changed=0 failed=0 unreachable=0 skipped=4 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 12.9 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:06:27
+
+- **Game:** Shellshock (CVE-2014-6271)
+- **Deployment:** OK (ok=11 changed=0 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** FAIL
+- **Flag Retrieved:** No
+- **Verification:** FAIL
+- **Duration:** 8.5 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment: OK. Exploit: FAIL (rc=22). Flag retrieved: No.
+
+## 2026-07-17 11:06:36
+
+- **Game:** SSH Weak Password
+- **Deployment:** OK (ok=7 changed=0 failed=0 unreachable=0 skipped=0 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 3.8 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:21:45
+
+- **Game:** Anonymous FTP Access
+- **Deployment:** OK (ok=9 changed=0 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 8.7 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:21:53
+
+- **Game:** Network Reconnaissance
+- **Deployment:** OK (ok=13 changed=0 failed=0 unreachable=0 skipped=4 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 12.9 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:22:06
+
+- **Game:** Shellshock (CVE-2014-6271)
+- **Deployment:** OK (ok=11 changed=0 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** FAIL
+- **Flag Retrieved:** No
+- **Verification:** FAIL
+- **Duration:** 8.9 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment: OK. Exploit: FAIL (rc=22). Flag retrieved: No.
+
+## 2026-07-17 11:22:15
+
+- **Game:** SSH Weak Password
+- **Deployment:** OK (ok=7 changed=0 failed=0 unreachable=0 skipped=0 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 4.0 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:26:37
+
+- **Game:** Anonymous FTP Access
+- **Deployment:** OK (ok=9 changed=0 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 9.3 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:26:46
+
+- **Game:** Network Reconnaissance
+- **Deployment:** OK (ok=13 changed=0 failed=0 unreachable=0 skipped=4 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 13.6 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:27:00
+
+- **Game:** Shellshock (CVE-2014-6271)
+- **Deployment:** OK (ok=11 changed=0 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** FAIL
+- **Flag Retrieved:** No
+- **Verification:** FAIL
+- **Duration:** 9.3 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment: OK. Exploit: FAIL (rc=22). Flag retrieved: No.
+
+## 2026-07-17 11:27:09
+
+- **Game:** SSH Weak Password
+- **Deployment:** OK (ok=7 changed=0 failed=0 unreachable=0 skipped=0 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 4.0 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:32:37
+
+- **Game:** Anonymous FTP Access
+- **Deployment:** OK (ok=9 changed=0 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 7.8 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:32:45
+
+- **Game:** Network Reconnaissance
+- **Deployment:** OK (ok=13 changed=0 failed=0 unreachable=0 skipped=4 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 13.1 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:32:58
+
+- **Game:** Shellshock (CVE-2014-6271)
+- **Deployment:** OK (ok=12 changed=1 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 12.0 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:33:10
+
+- **Game:** SSH Weak Password
+- **Deployment:** OK (ok=7 changed=0 failed=0 unreachable=0 skipped=0 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 4.0 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:54:24
+
+- **Game:** Anonymous FTP Access
+- **Deployment:** OK (ok=9 changed=0 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 10.7 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:54:35
+
+- **Game:** Network Reconnaissance
+- **Deployment:** OK (ok=13 changed=0 failed=0 unreachable=0 skipped=4 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 15.5 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:54:50
+
+- **Game:** Shellshock (CVE-2014-6271)
+- **Deployment:** OK (ok=12 changed=1 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 12.7 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:55:03
+
+- **Game:** SSH Weak Password
+- **Deployment:** OK (ok=7 changed=0 failed=0 unreachable=0 skipped=0 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 4.2 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:56:23
+
+- **Game:** Anonymous FTP Access
+- **Deployment:** OK (ok=9 changed=0 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 10.2 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:56:33
+
+- **Game:** Network Reconnaissance
+- **Deployment:** OK (ok=13 changed=0 failed=0 unreachable=0 skipped=4 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 15.1 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:56:48
+
+- **Game:** Shellshock (CVE-2014-6271)
+- **Deployment:** OK (ok=12 changed=1 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 12.5 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-17 11:57:01
+
+- **Game:** SSH Weak Password
+- **Deployment:** OK (ok=7 changed=0 failed=0 unreachable=0 skipped=0 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 4.4 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
