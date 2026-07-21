@@ -1,0 +1,67 @@
+---
+# Game: SUID Privilege Escalation
+#
+# A careless sysadmin at NovaTech Solutions copied bash to /usr/local/bin/suid-shell
+# and left the SUID root bit set, thinking it was a harmless debug tool. Any local user
+# can run it with -p to preserve the effective UID (root) and read files owned by root.
+# The flag is in /root/flag.txt, mode 0400 — inaccessible to the trainee account directly.
+- name: Deploy SUID Privilege Escalation scenario
+  hosts: cyberrange
+  vars:
+    trainee_user: trainee
+    trainee_password: letmein123
+    suid_shell_path: /usr/local/bin/suid-shell
+    flag_content: "WMG{su1d_b4sh_pr1v3sc_1s_trivial}"
+
+  tasks:
+    - name: Ensure sshd allows password authentication
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication yes'
+
+    - name: Create low-privilege trainee account
+      ansible.builtin.user:
+        name: "{{ trainee_user }}"
+        shell: /bin/bash
+        create_home: yes
+        state: present
+
+    - name: Set trainee password to a known weak value
+      ansible.builtin.shell: "echo '{{ trainee_user }}:{{ trainee_password }}' | chpasswd"
+      changed_when: false
+
+    - name: Plant the flag in root's home (readable only by root)
+      ansible.builtin.copy:
+        content: "{{ flag_content }}\n"
+        dest: /root/flag.txt
+        owner: root
+        group: root
+        mode: '0400'
+
+    - name: Deploy sysadmin note hinting at a custom binary in /usr/local/bin
+      ansible.builtin.copy:
+        content: |
+          NovaTech Systems - Maintenance Note
+          A debug shell has been installed at /usr/local/bin/ for troubleshooting.
+          Remember to remove it after the maintenance window. -- IT Operations
+        dest: "/home/{{ trainee_user }}/note.txt"
+        owner: "{{ trainee_user }}"
+        group: "{{ trainee_user }}"
+        mode: '0644'
+
+    - name: Copy bash to suid-shell path (the intentional vulnerability)
+      ansible.builtin.copy:
+        src: /bin/bash
+        dest: "{{ suid_shell_path }}"
+        remote_src: yes
+        owner: root
+        group: root
+        mode: '04755'
+
+    - name: Restrict trainee home directory to owner only
+      ansible.builtin.file:
+        path: "/home/{{ trainee_user }}"
+        owner: "{{ trainee_user }}"
+        group: "{{ trainee_user }}"
+        mode: '0700'

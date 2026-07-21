@@ -632,3 +632,80 @@ a live deployment rather than assumed to work.
 - **Duration:** 4.4 seconds
 - **Human Intervention:** No
 - **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-21 10:51:13
+
+- **Game:** SUID Privilege Escalation
+- **Deployment:** OK (ok=8 changed=5 failed=0 unreachable=0 skipped=0 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 5.2 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-21 10:51:25
+
+- **Game:** SUID Privilege Escalation
+- **Deployment:** OK (ok=8 changed=0 failed=0 unreachable=0 skipped=0 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 4.3 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-21 10:53:47
+
+- **Game:** Anonymous FTP Access
+- **Deployment:** OK (ok=10 changed=1 failed=0 unreachable=0 skipped=1 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 10.6 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-21 10:53:58
+
+- **Game:** Network Reconnaissance
+- **Deployment:** OK (ok=15 changed=2 failed=0 unreachable=0 skipped=2 rescued=0 ignored=1)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 14.4 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-21 10:54:12
+
+- **Game:** Shellshock (CVE-2014-6271)
+- **Deployment:** OK (ok=12 changed=1 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 11.3 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-21 10:54:24
+
+- **Game:** SSH Weak Password
+- **Deployment:** OK (ok=7 changed=0 failed=0 unreachable=0 skipped=0 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 3.9 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-21 10:54:27
+
+- **Game:** SUID Privilege Escalation
+- **Deployment:** OK (ok=8 changed=0 failed=0 unreachable=0 skipped=0 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 4.2 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.

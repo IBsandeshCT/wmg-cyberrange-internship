@@ -1,3 +1,16 @@
+## 2026-07-21 — suid-privesc game
+- Changed: added games/suid-privesc/ (setup.yml + training.json)
+- Changed: added agent-harness/exploits/suid-privesc.exploit
+- Changed: added ~/wmg-suid-privesc-cyberrange/ CyberRange deployment repo
+- Outcome: verify.sh PASS on first run (5.2s), idempotent on second run (changed=0)
+- Outcome: verify-all.sh 5/5 PASS, 100% success rate
+- Dead ends: none — bash SUID -p pattern worked immediately
+
+## 2026-07-21 — skills files + CLAUDE.md rewrite
+- Changed: skills/cyberrange-platform.md, skills/ansible-conventions.md, skills/game-design.md, skills/verification.md
+- Changed: CLAUDE.md rewritten as lazy senior dev guide
+- Outcome: all 4 skills files based on actual source material, no invented content
+
 ## 2026-07-17 — Week 2 complete
 - Changed: all 4 games verified passing
 - Changed: agent-harness/verify-all.sh built and working
