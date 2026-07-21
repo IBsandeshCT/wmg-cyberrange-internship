@@ -1,0 +1,76 @@
+---
+# Game: Directory Traversal Vulnerability
+#
+# Deploys Apache configured to serve files from /var/www/html/. The trainee is
+# given a URL to access "/files/documents/" but without proper path validation,
+# attackers can use ../ sequences to traverse up the directory tree and read
+# any file the web server process can access — including /etc/passwd and a flag
+# file placed outside the intended document root.
+- name: Deploy Directory Traversal scenario
+  hosts: cyberrange
+  vars:
+    flag_content: "WMG{d1r_trav3rs4l_n0_s4n1t1z3d_p4ths}"
+
+  tasks:
+    - name: Install Apache
+      ansible.builtin.apt:
+        name: apache2
+        state: present
+        update_cache: yes
+
+    - name: Create intended document directory structure
+      ansible.builtin.file:
+        path: /var/www/html/files/documents
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Plant innocuous files in the intended documents folder
+      ansible.builtin.copy:
+        content: |
+          This is a public document.
+          It contains no sensitive information.
+        dest: /var/www/html/files/documents/README.txt
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+    - name: Create a secrets directory outside the intended document root
+      ansible.builtin.file:
+        path: /var/www/html/secrets
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Plant a flag file in the secrets directory
+      # This simulates a file that should not be accessed directly, but can be
+      # reached via directory traversal from the /files/ path.
+      ansible.builtin.copy:
+        content: "{{ flag_content }}\n"
+        dest: /var/www/html/secrets/flag.txt
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+    - name: Check whether Apache is already running
+      ansible.builtin.command: pgrep -x apache2
+      register: apache_running
+      changed_when: false
+      failed_when: false
+
+    - name: Start Apache (first run only)
+      ansible.builtin.command: apache2ctl start
+      when: apache_running.rc != 0
+
+    - name: Restart Apache
+      ansible.builtin.service:
+        name: apache2
+        state: restarted
+
+    - name: Wait for port 80 to accept connections
+      ansible.builtin.wait_for:
+        port: 80
+        host: 127.0.0.1
+        timeout: 15
