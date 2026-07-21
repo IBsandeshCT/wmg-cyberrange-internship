@@ -1,199 +1,210 @@
-# Building CyberRangeCZ Games — WMG Internship
+# CyberRangeCZ Game Builder — Lazy Senior Dev Guide
 
-## Overview
+---
 
-WMG (Warwick Manufacturing Group, University of Warwick) summer internship. Build small,
-self-contained, reproducible cyber-security training **games** — one well-known vulnerability
-class each — provisioned entirely by Ansible so any game can be torn down and rebuilt from source.
+## SECTION 0 — PRIME DIRECTIVE
 
-- **Target platform:** CyberRangeCZ (KYPO), the MUNI cyber range. Games ship as a
-  `topology.yml` + `training.json` + Ansible `provisioning/` bundle.
-- **Research question:** Can an AI coding agent, given the right patterns, reliably author
-  correct, idempotent, deployable CyberRangeCZ games from a plain-English brief?
-- **Flags:** always `WMG{...}`, lower-snake, readable only after the intended exploit.
+**Think long, call once.**
 
-## Authoritative Documentation
+Before every tool call answer these four questions:
+1. What exactly do I need?
+2. Can I chain multiple things into one call?
+3. Do I already know this from prior context?
+4. Is this call strictly necessary?
 
-The CyberRangeCZ conventions used here are distilled from **Mirek's skills**, mirrored into
-`skills/` in this repo and kept in sync with `~/mirek-skills/`. **`~/mirek-skills/` is the
-single source of truth** — read the relevant file before authoring any artifact:
+**Hard budget: 3 tool round trips per investigation.**
+If you haven't found it in 3 tries, you're searching wrong — stop and restate the question.
 
-| Topic | Skill file |
-|-------|-----------|
-| Vocabulary (sandbox, pool, level, phase, APG) | `skills/terminology.md` |
-| `topology.yml` structure & rules | `skills/sandbox-topology.md` |
-| Topology worked examples | `skills/sandbox-examples.md` |
-| Networking (WAN, routers, IP allocation) | `skills/sandbox-networking.md` |
-| `provisioning/` playbooks & patterns | `skills/sandbox-provisioning.md` |
-| ansible-stage-one (auto networking) | `skills/backend-ansible-stage-one.md` |
-| Linear `training.json` | `skills/training-linear.md` |
-| Level & question types | `skills/training-levels.md` |
-| Adaptive (phases, decision matrix) | `skills/training-adaptive.md` |
-| APG / variant answers | `skills/training-apg.md` |
-| Gold reference walkthrough | `skills/starting-point-for-game-design.md` |
-| Backend lifecycle | `skills/backend-sandbox-service.md` |
+**Cap every output:** append `| head -50` to every shell command that might be verbose.
 
-## Environment
-
-- **Host:** Windows 11 + **WSL2 Ubuntu**. Do all Linux work inside WSL, not Windows.
-- **Docker Desktop** with WSL2 integration — for local target/attacker containers.
-- **ansible-core 2.21** (via `pip install --user`; only on PATH in a login shell — use
-  `bash -lc`, not `bash -c`). Uses `ansible.builtin` modules only.
-- Managed nodes need **Python ≥ 3.9** (modules embed `from __future__ import annotations`).
-  Controller runs Python 3.14 — no `crypt`/`passlib` on it.
-- Target base image is **`ubuntu:22.04`** (Python 3.10). Never `ubuntu:18.04` / stock
-  `-sshd` images (Python 3.6.5, no upgrade path — see `research-logs/research-log.md`).
-
-## Two repo shapes — know which you're in
-
-1. **Local dev/test (this repo):** Docker target + `games/<name>/setup.yml` single-file
-   playbooks against `inventory/hosts.ini`. Where you build and prove a game.
-2. **CyberRangeCZ deployment (e.g. `~/wmg-ssh-cyberrange`):** `topology.yml` + `training.json`
-   + role-based `provisioning/`. What actually deploys.
-
-Build and verify in shape 1, then port to shape 2. Never author shape 2 blind.
-
-## CyberRangeCZ conventions
-
-### `topology.yml` — see `skills/sandbox-topology.md`
-
-Real example from `~/wmg-ssh-cyberrange`:
-
-```yaml
-name: wmg-ssh-weak-password-sandbox        # a-z start, [a-zA-Z0-9-] only, unique
-hosts:
-  - name: attacker
-    base_box: { image: kypo-kali-v2, mgmt_user: kali }
-    flavor: c2.r4gb.d25gb.swap
-    volumes: [ { size: 25 } ]
-  - name: server                            # add `hidden: true` to force discovery
-    base_box: { image: debian-12-x86_64, mgmt_user: debian }
-    flavor: c1.r2gb.d10gb
-    volumes: [ { size: 10 } ]
-routers:
-  - name: router
-    base_box: { image: debian-12-x86_64, mgmt_user: debian }
-    flavor: c1.r2gb.d10gb
-wan:      { name: internet-connection, cidr: 100.100.100.0/24 }
-networks: [ { name: wmg-switch, cidr: 10.1.27.0/24 } ]
-net_mappings:    [ {host: attacker, network: wmg-switch, ip: 10.1.27.23},
-                   {host: server,   network: wmg-switch, ip: 10.1.27.10} ]
-router_mappings: [ {router: router,  network: wmg-switch, ip: 10.1.27.1} ]
-groups: []
+**Never `cat` whole files.** Use `grep` and slice only:
+```bash
+grep -n "keyword" file.yml | head -20
+sed -n '10,30p' file.yml
 ```
 
-- `mgmt_user` **must** match the box: `kali` for Kali, `debian`/`ubuntu` for the target.
-- **IP allocation:** `.1` = router gateway, `.2` = DHCP (reserved). Hosts use `.3`+. Keep
-  host IPs stable — `training.json` hardcodes them in prose (e.g. `10.1.27.10`).
-- Networks (incl. WAN) must have disjunct CIDRs. `accessible_by_user: false` hides a
-  network from trainees; `hidden: true` hides a host from the topology view.
+---
 
-### `training.json` (linear) — see `skills/training-linear.md`, `skills/training-levels.md`
+## SECTION 1 — PERSISTENT MEMORY
 
-- Top level: `title`, `description`, `prerequisites`, `outcomes`, `state:"UNRELEASED"`,
-  `show_stepper_bar:true`, `levels`, `estimated_duration`, `variant_sandboxes:false`.
-- Level types, in order (sequential `order` from 0, no gaps):
-  - `INFO_LEVEL` (order 0): disclaimer + storyline intro; no answer.
-  - `ACCESS_LEVEL`: `passkey` (e.g. `"start"`), `cloud_content` + `local_content` (how to
-    SSH to the attacker box; state target/attacker IPs and "attack nothing outside sandbox").
-  - `TRAINING_LEVEL`: `answer` (or `answer_variable_name` + `variant_answers:true` for APG),
-    `content` (ends with an explicit "The flag is…" line), `solution` (fenced, with expected
-    output), `solution_penalized`, ordered `hints` (objects: `title`, `content`,
-    `hint_penalty`, `order` — **never plain strings**), `incorrect_answer_limit:10`,
-    `max_score` (rising per level), optional `mitre_techniques` + `expected_commands`.
-  - `ASSESSMENT_LEVEL`: `QUESTIONNAIRE` (or `TEST`) with MCQ `questions` (one `correct:true`).
-- One flag = one level; each level's task assumes the previous level's result.
+At the **start of every session**, read both:
+- `DESIGN.md` — current task, plan, known facts (file:line), open gaps
+- `CHANGELOG.md` — what changed, what failed, what dead ends were hit
 
-### `provisioning/` — see `skills/sandbox-provisioning.md`
+At the **end of every session** (or whenever state changes), update both.
 
-`ansible-stage-one` configures networking automatically **before** your playbook runs (see
-`skills/backend-ansible-stage-one.md`); you only install packages, create users, and set up
-the scenario. Layout from `~/wmg-ssh-cyberrange`:
-
+### DESIGN.md format
 ```
-provisioning/
-├── playbook.yml            # one play PER host: hosts: server / attacker, become: yes, roles: [<host>]
-├── requirements.yml        # roles: []  collections: []  (ansible.builtin only unless truly needed)
-└── roles/<host>/
-    ├── tasks/main.yml      # the work
-    ├── vars/main.yml       # user names, passwords, flag_content, fixed salt
-    ├── handlers/main.yml   # e.g. Restart ssh — NOT on sshd-as-PID1 containers
-    └── files/              # wordlists, payloads, decoys
+## Task
+One sentence: what we are building right now.
+
+## Plan
+Ordered steps, checked off as done.
+
+## Facts
+- games/ssh-weak-password/setup.yml:42 — password hash uses fixed salt
+- agent-harness/verify.sh:15 — exit 0 = PASS contract
+
+## Gaps
+- Unknown: does ftp-anon game need vsftpd restart handler?
 ```
 
-Separate role per host; `playbook.yml` maps hosts→roles. Idempotent: a second run reports
-`changed=0`. Default Ansible groups (`all`, `hosts`, `routers`, `user_accessible_nodes`, …)
-are available without declaring them.
+### CHANGELOG.md format
+```
+## 2026-07-21
+- Changed: rewrote shellshock CGI handler
+- Outcome: verify.sh PASS on first run
+- Dead end: tried restarting apache2 via notify — killed container (sshd-as-PID1 trap)
+```
 
-### APG (variant answers) — see `skills/training-apg.md`
+**Dead ends are the most valuable entries.** If you hit a dead end, log it immediately and stop retrying the same approach.
 
-For per-sandbox unique flags (defeats answer sharing): set `variant_sandboxes:true`, add a
-`variables.yml` in the sandbox root (`root_flag: {type: password, length: 12}`), reference it
-in provisioning (`content: "{{ root_flag | default('WMG{local-test-flag}') }}\n"`), and in
-the level use `answer_variable_name:"root_flag"` with `answer:null`. `${ANSWER}` substitutes
-in solutions.
+---
 
-## Idempotency & correctness rules (learned the hard way)
+## SECTION 2 — LAZINESS LADDER
 
-- **Passwords:** `password_hash('sha512', <fixed_salt>)` with a *fixed* salt in vars (see
-  `roles/server/vars/main.yml`: `student_password_salt: wmgsshsalt01234`). A random salt
-  breaks idempotency. Or `chpasswd` via `shell` + `changed_when: false`.
-- **CVE reproduction:** build the vulnerable binary to its own path (e.g.
-  `/usr/local/bin/bash-vulnerable`) and point the target's shebang there — never replace `/bin/bash`.
-- **Foreground daemons** on init-less containers (`vsftpd`, custom scripts): launch with
-  `async: 86400, poll: 0`, guarded by a `pgrep`/`wait_for` check-then-launch task.
-- **systemd-less containers:** create runtime dirs `systemd-tmpfiles` would (e.g. vsftpd's
-  `/var/run/vsftpd/empty`) explicitly, or the service starts but silently fails.
-- **`creates:` guards:** verify the *actual* file a command produces (`a2enmod cgi` makes
-  `cgid.load` under the threaded MPM) — check with `ls` first.
-- **Never restart `sshd`** where `sshd -D` is PID 1; it kills the container.
-- **Task names:** avoid unquoted colons (`Set user:lazydev …` parses as key-value) — YAML breaks.
-- **sudoers:** always `validate: "visudo -cf %s"` on the copy task.
-- **Windows+WSL:** provision only from the LF (WSL) checkout; a CRLF shebang breaks CGI. Pin
-  `*.cgi *.py *.j2 *.sh` to `eol=lf` in `.gitattributes`. Never commit a PAT in a git remote URL.
+Before writing any code, climb this ladder:
 
-## Reuse over invention
+1. **Does it need to exist?** Can the task be done by changing config, not adding code?
+2. **Does it already exist?** Check `games/`, `~/junior-hacker/`, `~/wmg-ssh-cyberrange/`.
+3. **Can it be one line?** Minimum code that works is the right answer.
 
-- **Always start from an existing game** in this repo, `~/wmg-ssh-cyberrange`, or
-  `~/junior-hacker` (the public MUNI reference). Copy its structure, then adapt.
-- Match existing naming, IP scheme, level ordering, hint/scoring style, and file layout.
-- Reuse a solved pattern (password hashing, async daemon launch, decoy services) verbatim
-  rather than writing a new one. Study `research-logs/research-log.md` before touching Ansible.
+Rules:
+- No boilerplate nobody asked for.
+- No abstractions unless they're solving a real, current problem.
+- No helper functions for one-time operations.
+- Copy a working pattern verbatim before inventing a new one.
+- Three similar lines is better than a premature abstraction.
 
-## The three working games (use as templates)
+---
 
-| Game | Vuln | Services / flag path | Key technique |
-|---|---|---|---|
-| `games/ssh-weak-password` | Weak SSH creds | SSH 22, `~/flag.txt` (0600) | hydra dict attack; weak `student`/`password123` |
-| `games/shellshock` | CVE-2014-6271 | Apache CGI 80, `/opt/flag.txt` | separate vulnerable bash 4.3; `curl` header payload |
-| `games/network-recon` | Enumeration | FTP 21 + HTTP 80 decoys, banner TCP 8888 | real flag behind one port; decoys distract |
+## SECTION 3 — EVIDENCE DISCIPLINE
 
-Each game dir: `setup.yml`, `files/`, `briefing.md` (student scenario), `hints.md`
-(progressive), `solution.md` (full instructor walkthrough with exact commands + output).
-`~/wmg-ssh-cyberrange` is `ssh-weak-password` already ported to CyberRangeCZ shape — mirror
-its layout when porting the others.
+- **Never fabricate** command output, exit codes, or commit hashes.
+- **Never guess** — if you don't know, say "gap" and investigate.
+- **Live code beats documentation** — if the skill file says X but the working game does Y, trust the game.
+- Only claim PASS if you actually saw exit code 0.
+- Only claim idempotent if you actually ran the playbook twice.
 
-## Local Docker test harness
+---
 
-- `docker/Dockerfile.target` — `ubuntu:22.04` + `openssh-server` + `python3` + `sudo`,
-  `root:root`, `PermitRootLogin yes`, `CMD sshd -D`, SSH published on host `2222`.
-- `docker/Dockerfile.attacker` — `kalilinux/kali-rolling` + hydra, nmap, netcat, curl,
-  openssh-client, ftp. Run tools against the target by container name on `cyberrange-net`.
-- `inventory/hosts.ini` — `target` at `127.0.0.1:2222`, `ansible_user=root`, host-key checks
-  off (`StrictHostKeyChecking=no`, `UserKnownHostsFile=/dev/null`), py3 interpreter pinned.
+## SECTION 4 — CYBERRANGE ENVIRONMENT FACTS
 
-## Golden rule: test locally with Docker before pushing to CyberRange
+**Platform:** CyberRangeCZ on OpenStack at `cr.cyber.warwick.ac.uk`
 
-Never push a game to CyberRangeCZ until it is proven end-to-end against the local Docker target:
-1. `ansible -i inventory/hosts.ini cyberrange -m ping` succeeds.
-2. Run `setup.yml` twice — second run MUST be `changed=0 failed=0` (idempotent).
-3. Run the real exploit from the attacker container and confirm the exact `WMG{...}` flag.
-4. Rebuild the target from scratch and run all games together — confirm no conflicts.
+**Deployment unit:**
+- Sandbox Definition = Git repo with `topology.yml` + `provisioning/`
+- Training Definition = `training.json` uploaded manually via the portal
+- These are separate artifacts; the portal links them.
 
-Then port to `topology.yml` + `training.json` + role-based `provisioning/`, re-verifying idempotency.
+**Local test environment:**
+- Docker container `cyberrange-target` — Ubuntu 22.04
+- Ports: SSH=2222, HTTP=80, FTP=21, custom banner=8888
+- Ansible inventory: `~/wmg-cyberrange-internship/inventory/hosts.ini`
+- `ansible_python_interpreter=/usr/bin/python3`
 
-## THE GOLDEN RULE
+**Kali attacker (in CyberRange):**
+- NO internet during provisioning
+- NEVER use `apt-get` in attacker provisioning
+- All tools pre-installed: `nmap`, `hydra`, `curl`, `netcat`, `sshpass`, `ftp`, `sqlmap`, `nikto`, `gobuster`, `john`, `hashcat`
 
-**Always read `~/mirek-skills/` (mirrored in `skills/`) before generating any CyberRangeCZ
-artifact** — topology, training definition, provisioning, or APG variables. It is the
-authoritative source; these notes only summarise it and record what broke in practice.
+**Target server (in CyberRange):**
+- Debian 12, HAS internet during provisioning
+- Use `ansible.builtin.apt` freely
+
+**Ansible rules:**
+- Always idempotent — second run must be `changed=0 failed=0`
+- Use handlers for service restarts
+- **Force Apache restart after CGI config** — `meta: flush_handlers` or explicit restart task; this is a known issue (see CHANGELOG.md)
+- Never restart `sshd` where `sshd -D` is PID 1 — kills the container
+- Fixed salt for password hashes — random salt breaks idempotency
+- `creates:` guards must check the *actual* file produced, not the command name
+
+**training.json constraints:**
+- All string fields must be under 255 characters
+- Hint penalties must not sum to more than `max_score` for that level
+- Always: `"show_stepper_bar": true`, `"variant_sandboxes": false`
+- Level `order` starts at 0, no gaps
+
+**Reference game:** `~/junior-hacker/` — read its structure before building anything new.
+
+---
+
+## SECTION 5 — EXISTING GAMES
+
+| Game | Vulnerability | Status |
+|------|--------------|--------|
+| `games/ssh-weak-password/` | SSH brute force (hydra) | PASSES verify.sh |
+| `games/shellshock/` | CVE-2014-6271 Apache CGI | PASSES verify.sh |
+| `games/network-recon/` | nmap reconnaissance | PASSES verify.sh |
+| `games/ftp-anon/` | Anonymous FTP login | PASSES verify.sh |
+
+**CyberRangeCZ deployment repos:**
+- `~/wmg-ssh-cyberrange` — SSH weak password, fully ported
+- `~/wmg-shellshock-cyberrange` — Shellshock, fully ported
+- `~/wmg-network-recon-cyberrange` — Network recon, fully ported
+
+When building a new game, pick the closest existing game as a template and diff from there.
+
+---
+
+## SECTION 6 — VERIFICATION
+
+**Run:** `agent-harness/verify.sh <game-name>`
+
+**Contract:**
+- Exit 0 = PASS
+- Exit 1 = FAIL
+- Never claim PASS without seeing exit code 0
+
+**Exploit definitions:** `agent-harness/exploits/<game-name>.exploit`
+- Must be a standalone bash script that drives the full exploit and prints the flag
+- The harness sources this and checks that `WMG{...}` appears in stdout
+
+**Known issues:**
+- Apache requires a forced restart after CGI module config — the `a2enmod cgid` task and handler flush must be explicit. Tracked in CHANGELOG.md.
+- vsftpd on init-less containers: launch with `async: 86400, poll: 0`; create `/var/run/vsftpd/empty` explicitly before starting.
+
+---
+
+## SECTION 7 — AUTONOMOUS GAME BUILDER WORKFLOW
+
+When asked to build a game from a learning objective, execute **all of this without asking permission**:
+
+1. Read `DESIGN.md` and `CHANGELOG.md`
+2. Read `~/junior-hacker/` structure (`ls` + key files)
+3. Read one existing working game whose vuln is closest to the target
+4. Design: vulnerability class, scenario prose, flag location, exploit path
+5. Write `agent-harness/exploits/<name>.exploit`
+6. Write `games/<name>/setup.yml` for local Docker testing
+7. Run `verify.sh` — fix until exit 0; log every dead end in CHANGELOG.md
+8. Write `training.json` following `~/junior-hacker/` structure exactly
+9. Write CyberRangeCZ repo: `topology.yml` + `provisioning/` (role-based)
+10. Validate: `python3 -m json.tool training.json` and `yamllint topology.yml`
+11. Git commit and push
+12. Update `DESIGN.md` and `CHANGELOG.md` with outcomes
+13. Report actual results only — commit SHA, verify exit code, any remaining gaps
+
+**Stop rules:**
+- Do not stop until `verify.sh` returns exit 0.
+- Do not ask for permission between steps.
+- Do not explain what you are about to do — just do it.
+- Report only when done or genuinely blocked.
+
+---
+
+## SECTION 8 — MOST IMPORTANT RULE
+
+**Never try to solve the problem too hard.**
+
+After **2 failed attempts** at the same approach:
+1. Stop.
+2. Log the dead end in `CHANGELOG.md` with exactly what failed and why.
+3. Ask the user for direction.
+
+Do not descend into rabbit holes. The third attempt at the same broken approach is always wrong.
+
+---
+
+**One-line summary:**
+Read notes first → plan like an architect → read code like a surgeon with output capped → record facts and dead ends → write minimum correct solution → verify it exits 0 → stop.
