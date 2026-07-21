@@ -1,0 +1,88 @@
+---
+# Game: SQL Injection — Login Form Bypass
+#
+# Deploys an Apache + PHP web application backed by SQLite. The login form
+# concatenates user input directly into a SQL query, making it trivially
+# injectable. The flag is stored in a 'secrets' table and is only revealed
+# after the authentication check is bypassed via SQL injection.
+- name: Deploy SQL Injection Login Form scenario
+  hosts: cyberrange
+  vars:
+    db_dir: /var/www/db
+    db_path: /var/www/db/app.db
+    flag_content: "WMG{sq1_1nj3ct10n_byp4ss3d_auth}"
+
+  tasks:
+    - name: Install Apache, PHP and PHP-SQLite3 extension
+      ansible.builtin.apt:
+        name:
+          - apache2
+          - php
+          - libapache2-mod-php
+          - php-sqlite3
+        state: present
+        update_cache: yes
+
+    - name: Create database directory owned by www-data
+      ansible.builtin.file:
+        path: "{{ db_dir }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0750'
+
+    - name: Initialise SQLite database with users and secrets tables
+      # Python 3 is already present on Ubuntu 22.04; no extra package needed.
+      # INSERT OR IGNORE keeps this idempotent on repeated runs.
+      ansible.builtin.shell: |
+        python3 - << 'EOF'
+        import sqlite3, os
+        conn = sqlite3.connect('{{ db_path }}')
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS users
+                     (id INTEGER PRIMARY KEY, username TEXT NOT NULL, password TEXT NOT NULL)''')
+        c.execute("INSERT OR IGNORE INTO users (id,username,password) VALUES (1,'admin','supersecret99!')")
+        c.execute("INSERT OR IGNORE INTO users (id,username,password) VALUES (2,'alice','alice2024pass')")
+        c.execute('''CREATE TABLE IF NOT EXISTS secrets
+                     (id INTEGER PRIMARY KEY, flag TEXT NOT NULL)''')
+        c.execute("INSERT OR IGNORE INTO secrets (id,flag) VALUES (1,'{{ flag_content }}')")
+        conn.commit()
+        conn.close()
+        EOF
+      changed_when: false
+
+    - name: Set database file ownership so www-data can read it
+      ansible.builtin.file:
+        path: "{{ db_path }}"
+        owner: www-data
+        group: www-data
+        mode: '0640'
+
+    - name: Deploy the vulnerable PHP login page
+      ansible.builtin.copy:
+        src: files/login.php
+        dest: /var/www/html/login.php
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+    - name: Check whether Apache is already running
+      ansible.builtin.command: pgrep -x apache2
+      register: apache_running
+      changed_when: false
+      failed_when: false
+
+    - name: Start Apache (first run only)
+      ansible.builtin.command: apache2ctl start
+      when: apache_running.rc != 0
+
+    - name: Restart Apache to activate PHP module
+      ansible.builtin.service:
+        name: apache2
+        state: restarted
+
+    - name: Wait for port 80 to accept connections
+      ansible.builtin.wait_for:
+        port: 80
+        host: 127.0.0.1
+        timeout: 15

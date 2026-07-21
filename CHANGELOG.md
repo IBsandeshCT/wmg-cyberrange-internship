@@ -1,3 +1,11 @@
+## 2026-07-21 — sqli-login game
+- Changed: added games/sqli-login/ (setup.yml + files/login.php + training.json)
+- Changed: added agent-harness/exploits/sqli-login.exploit
+- Changed: added ~/wmg-sqli-login-cyberrange/ CyberRange deployment repo
+- Outcome: verify.sh PASS on first run (44.7s), idempotent on second run (changed=1 is Apache restart, by design)
+- Outcome: verify-all.sh 6/6 PASS, 100% success rate
+- Dead ends: none — PHP + SQLite approach worked on first attempt
+
 ## 2026-07-21 — suid-privesc game
 - Changed: added games/suid-privesc/ (setup.yml + training.json)
 - Changed: added agent-harness/exploits/suid-privesc.exploit

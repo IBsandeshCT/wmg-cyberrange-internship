@@ -709,3 +709,91 @@ a live deployment rather than assumed to work.
 - **Duration:** 4.2 seconds
 - **Human Intervention:** No
 - **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-21 11:58:57
+
+- **Game:** SQL Injection — Login Form Bypass
+- **Deployment:** OK (ok=9 changed=5 failed=0 unreachable=0 skipped=1 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 44.7 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-21 11:59:49
+
+- **Game:** SQL Injection — Login Form Bypass
+- **Deployment:** OK (ok=9 changed=1 failed=0 unreachable=0 skipped=1 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 19.1 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-21 12:02:42
+
+- **Game:** Anonymous FTP Access
+- **Deployment:** OK (ok=9 changed=0 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 14.7 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-21 12:02:57
+
+- **Game:** Network Reconnaissance
+- **Deployment:** OK (ok=13 changed=0 failed=0 unreachable=0 skipped=4 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 22.0 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-21 12:03:19
+
+- **Game:** Shellshock (CVE-2014-6271)
+- **Deployment:** OK (ok=12 changed=1 failed=0 unreachable=0 skipped=2 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 16.7 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-21 12:03:36
+
+- **Game:** SQL Injection — Login Form Bypass
+- **Deployment:** OK (ok=9 changed=1 failed=0 unreachable=0 skipped=1 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 15.2 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-21 12:03:51
+
+- **Game:** SSH Weak Password
+- **Deployment:** OK (ok=7 changed=0 failed=0 unreachable=0 skipped=0 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 6.6 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
+
+## 2026-07-21 12:03:58
+
+- **Game:** SUID Privilege Escalation
+- **Deployment:** OK (ok=8 changed=0 failed=0 unreachable=0 skipped=0 rescued=0 ignored=0)
+- **Exploit:** PASS
+- **Flag Retrieved:** Yes
+- **Verification:** PASS
+- **Duration:** 6.5 seconds
+- **Human Intervention:** No
+- **Notes:** Deployment successful. Exploit succeeded. Flag retrieved.
