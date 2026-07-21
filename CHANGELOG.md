@@ -1,3 +1,12 @@
+## 2026-07-21 — sqli-v2 game
+- Changed: added games/sqli-v2/ (setup.yml + files/search.php + training.json)
+- Changed: added agent-harness/exploits/sqli-v2.exploit
+- Changed: added ~/wmg-sqli-v2-cyberrange/ CyberRange deployment repo (topology 10.1.33.0/24)
+- Outcome: verify.sh PASS on first attempt (15.5s), idempotent on second run (changed=1 = Apache restart, by design)
+- Outcome: verify-all.sh 10/10 PASS, 100% success rate
+- Design: UNION-based SQLi in a 2-column book-catalogue search (Athenaeum Library) — teaches column-counting (ORDER BY) + UNION SELECT extraction; fully distinct from sqli-login's boolean login bypass. Flag WMG{un10n_b4s3d_sql1_l34ks_th3_db} in librarian_notes table
+- Dead ends: none — PHP+SQLite UNION approach worked first try; payload comment `-- -` (trailing dash) discards leftover `%'`
+
 ## 2026-07-21 — ssh-weak-v2 game
 - Changed: added games/ssh-weak-v2/ (setup.yml + files/wordlist.txt + training.json)
 - Changed: added agent-harness/exploits/ssh-weak-v2.exploit

