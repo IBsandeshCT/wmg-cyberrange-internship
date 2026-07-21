@@ -1,0 +1,80 @@
+---
+# Game: Privilege Escalation (v2) — sudo misconfiguration via find
+#
+# A DevOps engineer at Meridian Systems gave the shared "webadmin" account a
+# passwordless sudo rule to run /usr/bin/find (intended for log cleanup). But
+# find can execute arbitrary commands with -exec, so any find run as root is a
+# full root shell. The flag is in /root/flag.txt (mode 0400) — unreadable by
+# webadmin directly, but trivially readable via `sudo find ... -exec cat`.
+- name: Deploy Privilege Escalation (v2) — sudo misconfiguration scenario
+  hosts: cyberrange
+  vars:
+    op_user: webadmin
+    op_password: "Deploy2024!"
+    flag_content: "WMG{sud0_f1nd_3xec_r00ts_y0u}"
+
+  tasks:
+    - name: Ensure sudo is installed
+      ansible.builtin.apt:
+        name: sudo
+        state: present
+        update_cache: yes
+
+    - name: Ensure sshd allows password authentication
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication yes'
+
+    - name: Create low-privilege webadmin account
+      ansible.builtin.user:
+        name: "{{ op_user }}"
+        shell: /bin/bash
+        create_home: yes
+        comment: "Meridian Systems — Web Operations"
+        state: present
+
+    - name: Set webadmin password to a known value (foothold credentials)
+      ansible.builtin.shell: "echo '{{ op_user }}:{{ op_password }}' | chpasswd"
+      changed_when: false
+
+    - name: Plant the flag in root's home (readable only by root)
+      ansible.builtin.copy:
+        content: "{{ flag_content }}\n"
+        dest: /root/flag.txt
+        owner: root
+        group: root
+        mode: '0400'
+
+    - name: Deploy the misconfigured passwordless sudo rule (the vulnerability)
+      # webadmin may run find as root with no password. find's -exec turns this
+      # into arbitrary root command execution. validate ensures we never write
+      # a syntactically broken sudoers file that would lock everyone out.
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/webadmin
+        content: |
+          # Meridian DevOps — log maintenance helper for the web team.
+          # Lets webadmin clean up old logs without bothering an admin.
+          webadmin ALL=(root) NOPASSWD: /usr/bin/find
+        owner: root
+        group: root
+        mode: '0440'
+        validate: 'visudo -cf %s'
+
+    - name: Deploy an onboarding note hinting at the sudo helper
+      ansible.builtin.copy:
+        content: |
+          Meridian Systems — Web Ops Onboarding
+          For log cleanup you have been granted a passwordless sudo helper.
+          Run `sudo -l` to see what you are allowed to run. -- DevOps
+        dest: "/home/{{ op_user }}/onboarding.txt"
+        owner: "{{ op_user }}"
+        group: "{{ op_user }}"
+        mode: '0644'
+
+    - name: Restrict webadmin home directory to owner only
+      ansible.builtin.file:
+        path: "/home/{{ op_user }}"
+        owner: "{{ op_user }}"
+        group: "{{ op_user }}"
+        mode: '0700'

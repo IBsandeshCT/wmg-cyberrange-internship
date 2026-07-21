@@ -1,3 +1,12 @@
+## 2026-07-22 — privesc-v2 game
+- Changed: added games/privesc-v2/ (setup.yml + training.json)
+- Changed: added agent-harness/exploits/privesc-v2.exploit
+- Changed: added ~/wmg-privesc-v2-cyberrange/ CyberRange deployment repo (topology 10.1.34.0/24)
+- Outcome: verify.sh PASS on first attempt (14.8s), idempotent on second run (changed=0)
+- Outcome: verify-all.sh 11/11 PASS, 100% success rate
+- Design: sudo misconfiguration privesc (NOPASSWD /usr/bin/find abused via -exec) — distinct technique from suid-privesc's SUID bash. Teaches sudo -l enumeration + GTFOBins. User webadmin/Deploy2024!, flag WMG{sud0_f1nd_3xec_r00ts_y0u}
+- Dead ends: none — sudoers.d file written with validate: 'visudo -cf %s' guard worked first try; find -exec is non-interactive so verifies cleanly
+
 ## 2026-07-21 — sqli-v2 game
 - Changed: added games/sqli-v2/ (setup.yml + files/search.php + training.json)
 - Changed: added agent-harness/exploits/sqli-v2.exploit
