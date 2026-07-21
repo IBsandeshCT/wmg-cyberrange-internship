@@ -1,0 +1,56 @@
+---
+# Game: SSH Weak Password Attack (v2) — Halcyon Marine Systems
+#
+# A fresh take on the weak-SSH-credentials scenario. A maritime logistics firm
+# left a dockyard operator account ("deckhand") protected by a weak, guessable
+# password ("Sailor2024"). Password auth is enabled and the account appears in a
+# common-password wordlist, so it falls to an online dictionary attack (hydra).
+# The flag is only readable after authenticating as that account.
+- name: Deploy SSH Weak Password (v2) scenario
+  hosts: cyberrange
+  vars:
+    op_user: deckhand
+    op_password: Sailor2024
+    flag_content: "WMG{w3ak_ssh_cr3ds_s1nk_sh1ps}"
+
+  tasks:
+    - name: Ensure sshd allows password authentication
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication yes'
+
+    - name: Create dockyard operator account
+      ansible.builtin.user:
+        name: "{{ op_user }}"
+        shell: /bin/bash
+        create_home: yes
+        comment: "Halcyon Marine — Dockyard Operator"
+        state: present
+
+    - name: Set operator password to a weak, guessable value (intentional vulnerability)
+      ansible.builtin.shell: "echo '{{ op_user }}:{{ op_password }}' | chpasswd"
+      changed_when: false
+
+    - name: Deploy the maritime common-password wordlist used for brute forcing
+      ansible.builtin.copy:
+        src: files/wordlist.txt
+        dest: "/home/{{ op_user }}/crew-passwords.txt"
+        owner: "{{ op_user }}"
+        group: "{{ op_user }}"
+        mode: '0644'
+
+    - name: Plant the flag in the operator's home directory
+      ansible.builtin.copy:
+        content: "{{ flag_content }}\n"
+        dest: "/home/{{ op_user }}/manifest.txt"
+        owner: "{{ op_user }}"
+        group: "{{ op_user }}"
+        mode: '0600'
+
+    - name: Restrict the operator's home directory to the account owner only
+      ansible.builtin.file:
+        path: "/home/{{ op_user }}"
+        owner: "{{ op_user }}"
+        group: "{{ op_user }}"
+        mode: '0700'

@@ -1,3 +1,12 @@
+## 2026-07-21 — ssh-weak-v2 game
+- Changed: added games/ssh-weak-v2/ (setup.yml + files/wordlist.txt + training.json)
+- Changed: added agent-harness/exploits/ssh-weak-v2.exploit
+- Changed: added ~/wmg-ssh-weak-v2-cyberrange/ CyberRange deployment repo (topology 10.1.32.0/24)
+- Outcome: verify.sh PASS on first attempt (6.3s), idempotent on second run (changed=0)
+- Outcome: verify-all.sh 9/9 PASS, 100% success rate
+- Design: fresh maritime scenario (Halcyon Marine), user deckhand/Sailor2024, flag WMG{w3ak_ssh_cr3ds_s1nk_sh1ps}, custom maritime wordlist crew-passwords.txt — fully distinct from ssh-weak-password
+- Dead end (caught before running): initial setup.yml had an sshd HUP/reload task — removed it; the proven ssh-weak-password game reloads nothing (PID-1 sshd trap), so matched that pattern
+
 ## 2026-07-21 — xss-stored game
 - Changed: added games/xss-stored/ (setup.yml + files/ + training.json)
 - Changed: added agent-harness/exploits/xss-stored.exploit
