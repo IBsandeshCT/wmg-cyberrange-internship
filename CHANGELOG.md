@@ -1,3 +1,12 @@
+## 2026-07-21 — xss-stored game
+- Changed: added games/xss-stored/ (setup.yml + files/ + training.json)
+- Changed: added agent-harness/exploits/xss-stored.exploit
+- Changed: added ~/wmg-xss-stored-cyberrange/ CyberRange deployment repo
+- Outcome: verify.sh PASS on first attempt (16.1s), idempotent on second run (changed=3: Apache restart + data file resets, by design)
+- Outcome: verify-all.sh 8/8 PASS, 100% success rate
+- Design: stored XSS in PHP guestbook (unsanitised message output); bot.php simulates admin victim; collect.php simulates exfiltration endpoint
+- Dead ends: none — PHP bot simulation approach worked immediately
+
 ## 2026-07-21 — dir-traversal game
 - Changed: added games/dir-traversal/ (setup.yml + training.json)
 - Changed: added agent-harness/exploits/dir-traversal.exploit

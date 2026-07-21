@@ -1,0 +1,90 @@
+---
+# Game: Stored XSS — Cookie Theft Simulation
+#
+# Deploys an Apache + PHP guestbook application vulnerable to stored XSS.
+# Attack chain: inject a cookie-stealing payload into the guestbook →
+# trigger the admin bot to visit the page (XSS fires in the admin's context) →
+# read the stolen admin session token from the collector endpoint.
+- name: Deploy Stored XSS Guestbook scenario
+  hosts: cyberrange
+  vars:
+    data_dir: /var/www/data
+
+  tasks:
+    - name: Install Apache and PHP
+      ansible.builtin.apt:
+        name:
+          - apache2
+          - php
+          - libapache2-mod-php
+        state: present
+        update_cache: yes
+
+    - name: Create data directory (stores messages and collected cookies)
+      ansible.builtin.file:
+        path: "{{ data_dir }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Reset messages store to empty on each deploy
+      ansible.builtin.copy:
+        content: "[]"
+        dest: "{{ data_dir }}/messages.json"
+        owner: www-data
+        group: www-data
+        mode: '0664'
+
+    - name: Reset stolen-data collector to empty on each deploy
+      ansible.builtin.copy:
+        content: ""
+        dest: "{{ data_dir }}/collected.txt"
+        owner: www-data
+        group: www-data
+        mode: '0664'
+
+    - name: Deploy vulnerable guestbook PHP page
+      ansible.builtin.copy:
+        src: files/guestbook.php
+        dest: /var/www/html/guestbook.php
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+    - name: Deploy admin bot PHP page
+      ansible.builtin.copy:
+        src: files/bot.php
+        dest: /var/www/html/bot.php
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+    - name: Deploy stolen-data collector PHP page
+      ansible.builtin.copy:
+        src: files/collect.php
+        dest: /var/www/html/collect.php
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+    - name: Check whether Apache is already running
+      ansible.builtin.command: pgrep -x apache2
+      register: apache_running
+      changed_when: false
+      failed_when: false
+
+    - name: Start Apache (first run only)
+      ansible.builtin.command: apache2ctl start
+      when: apache_running.rc != 0
+
+    - name: Restart Apache to activate PHP module
+      ansible.builtin.service:
+        name: apache2
+        state: restarted
+
+    - name: Wait for port 80 to accept connections
+      ansible.builtin.wait_for:
+        port: 80
+        host: 127.0.0.1
+        timeout: 15
