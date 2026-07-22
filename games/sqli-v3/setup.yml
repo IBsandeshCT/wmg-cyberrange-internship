@@ -1,0 +1,86 @@
+---
+# Game: SQL Injection (v3) — Boolean Blind (Northgate Veterinary Clinic)
+#
+# The patient-lookup endpoint concatenates the id parameter directly into SQL.
+# The page returns only "Patient found" or "No record found" — no data is
+# echoed back. Students must infer hidden information purely from the boolean
+# page response, teaching boolean-based blind SQL injection.
+- name: Deploy SQL Injection (v3) — Boolean Blind scenario
+  hosts: cyberrange
+  vars:
+    db_dir: /var/www/db
+    db_path: /var/www/db/clinic.db
+    flag_content: "WMG{bl1nd_sql1_tr00th_0r_n0_tr00th}"
+
+  tasks:
+    - name: Install Apache, PHP and PHP-SQLite3 extension
+      ansible.builtin.apt:
+        name:
+          - apache2
+          - php
+          - libapache2-mod-php
+          - php-sqlite3
+        state: present
+        update_cache: yes
+
+    - name: Create database directory owned by www-data
+      ansible.builtin.file:
+        path: "{{ db_dir }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0750'
+
+    - name: Initialise SQLite database with patients and clinic_secrets tables
+      ansible.builtin.shell: |
+        python3 - << 'EOF'
+        import sqlite3
+        conn = sqlite3.connect('{{ db_path }}')
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS patients
+                     (id INTEGER PRIMARY KEY, name TEXT NOT NULL, species TEXT NOT NULL)''')
+        rows = [(1,'Biscuit','cat'),(2,'Mittens','cat'),(3,'Rex','dog'),(4,'Goldie','fish')]
+        c.executemany("INSERT OR IGNORE INTO patients VALUES (?,?,?)", rows)
+        c.execute('''CREATE TABLE IF NOT EXISTS clinic_secrets
+                     (id INTEGER PRIMARY KEY, record TEXT NOT NULL)''')
+        c.execute("INSERT OR IGNORE INTO clinic_secrets VALUES (1,'{{ flag_content }}')")
+        conn.commit()
+        conn.close()
+        EOF
+      changed_when: false
+
+    - name: Set database file ownership so www-data can read it
+      ansible.builtin.file:
+        path: "{{ db_path }}"
+        owner: www-data
+        group: www-data
+        mode: '0640'
+
+    - name: Deploy the vulnerable PHP patient lookup page
+      ansible.builtin.copy:
+        src: files/lookup.php
+        dest: /var/www/html/lookup.php
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+    - name: Check whether Apache is already running
+      ansible.builtin.command: pgrep -x apache2
+      register: apache_running
+      changed_when: false
+      failed_when: false
+
+    - name: Start Apache (first run only)
+      ansible.builtin.command: apache2ctl start
+      when: apache_running.rc != 0
+
+    - name: Restart Apache to activate PHP module
+      ansible.builtin.service:
+        name: apache2
+        state: restarted
+
+    - name: Wait for port 80 to accept connections
+      ansible.builtin.wait_for:
+        port: 80
+        host: 127.0.0.1
+        timeout: 15

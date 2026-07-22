@@ -1,3 +1,14 @@
+## Task: sqli-v3 game (2026-07-22)
+Plan: Fresh boolean-based blind SQLi (Northgate Veterinary Clinic) — COMPLETE, verify.sh PASS
+### Facts
+- 13 working games: ssh-weak-password, shellshock, network-recon, ftp-anon, suid-privesc, sqli-login, dir-traversal, xss-stored, ssh-weak-v2, sqli-v2, privesc-v2, ssh-weak-v3, sqli-v3
+- sqli-v3: Apache+PHP+SQLite; lookup.php GET /lookup.php?id=N returns only "Patient found: <name>" or "No record found." — no data echoed
+- sqli-v3: boolean blind injection via id param; hidden table clinic_secrets; flag WMG{bl1nd_sql1_tr00th_0r_n0_tr00th}
+- sqli-v3 exploit: Python3 binary search using UNICODE(SUBSTR(record,N,1))>=MID; ~245 requests; ~15s total
+- sqli-v3 distinct from sqli-login (auth bypass) and sqli-v2 (UNION extraction); teaches blind injection + sqlmap --technique=B
+- CyberRange repo: ~/wmg-sqli-v3-cyberrange/ (topology 10.1.36.0/24 + provisioning)
+- Next available subnet: 10.1.37.0/24
+
 ## Task: ssh-weak-v3 game (2026-07-22, rebuilt)
 Plan: Fresh weak-SSH-password variant (Crestwood University, campus-themed wordlist) — COMPLETE, verify.sh PASS, idempotent
 ### Facts
