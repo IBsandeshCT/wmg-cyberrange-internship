@@ -1,12 +1,12 @@
 {
-  "title": "SSH Weak Password — Apex Logistics",
-  "description": "Attack a shared corporate SSH account whose password follows a predictable company-name pattern. Use hydra with a targeted wordlist to recover the credential and retrieve the hidden flag.",
+  "title": "SSH Weak Password — Crestwood University",
+  "description": "A shared IT helpdesk account at Crestwood University uses a predictable campus-name password. Use hydra with a targeted academic wordlist to crack it, then log in and retrieve the hidden flag.",
   "prerequisites": [],
   "outcomes": [
-    "Explain why company-name based passwords are predictable and dangerous.",
-    "Identify the SSH service version and confirm password authentication is enabled.",
-    "Use hydra with a targeted corporate wordlist to perform an online dictionary attack.",
-    "Log in with recovered credentials and retrieve a sensitive file from the remote host."
+    "Explain why institutional naming conventions make passwords predictable and attackable.",
+    "Identify an SSH service and confirm password authentication is enabled.",
+    "Use hydra with a targeted campus-themed wordlist to perform an online dictionary attack.",
+    "Authenticate with recovered credentials and retrieve a sensitive file from the remote host."
   ],
   "state": "UNRELEASED",
   "show_stepper_bar": true,
@@ -18,7 +18,7 @@
       "level_type": "INFO_LEVEL",
       "order": 0,
       "estimated_duration": 0,
-      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or search for the technique online.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. Your client, **Apex Logistics**, runs a freight and warehousing operation. During OSINT you discovered their shift supervisors all share a single SSH account called `shiftlead` on the operations server.\n\nThe Apex IT policy document (leaked on a public Pastebin) states that default passwords follow the format *CompanyName + Year*. Your task: build a targeted wordlist, brute-force the SSH service, and retrieve the shift report that contains the flag."
+      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or search for the technique online.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. Your client, **Crestwood University**, asked for an assessment of their IT helpdesk infrastructure. During OSINT you found a forum post where a staff member complained that all helpdesk accounts share a single SSH login.\n\nA further search of the university's internal wiki (cached by Google) reveals that IT passwords follow the convention *CampusKeyword + Year* — short, memorable, and dangerously predictable.\n\nYour task: build a targeted wordlist from these clues, brute-force the SSH service, and retrieve the helpdesk ticket export that contains the flag."
     },
     {
       "title": "Get Access",
@@ -26,30 +26,30 @@
       "order": 1,
       "estimated_duration": 0,
       "passkey": "start",
-      "cloud_content": "SSH to your attacker machine at **10.1.35.23**, then confirm the target SSH service is reachable:\n\n```\nnc -zv 10.1.35.10 22\n```\n\nThe target operations server is at **10.1.35.10** (SSH port 22). Do not attack anything outside this sandbox. Submit **start** to begin.",
+      "cloud_content": "SSH to your attacker machine at **10.1.36.23**. Your target is the Crestwood University IT server at **10.1.36.10** (SSH port 22).\n\nConfirm the service is reachable:\n\n```\nnc -zv 10.1.36.10 22\n```\n\nDo not attack anything outside this sandbox. Submit **start** to begin.",
       "local_content": "The target SSH service is running locally on port **2222**:\n\n```\nnc -zv 127.0.0.1 2222\n```\n\nSubmit **start** to begin."
     },
     {
-      "title": "Confirm the Target Account",
+      "title": "Identify the Target Account",
       "level_type": "TRAINING_LEVEL",
       "order": 2,
       "estimated_duration": 8,
-      "answer": "shiftlead",
+      "answer": "itstaff",
       "answer_variable_name": null,
       "variant_answers": false,
-      "content": "OSINT revealed that Apex Logistics uses a shared SSH account for all shift supervisors. The account name reflects the role — a two-word compound noun describing a senior person running a shift.\n\nConfirm the service is up and accepting password authentication:\n\n```\nnmap -p 22 --script ssh-auth-methods --script-args ssh.user=root 10.1.35.10\n```\n\nLook for `password` in the auth methods output. If password authentication is enabled, a dictionary attack is viable.\n\nThe OSINT also confirmed the account name. It is the job title for someone who **leads** the warehouse **shift** — written as a single lowercase compound word.\n\n**What is the username of the shared shift supervisor account?**",
-      "solution": "```\n$ nmap -p 22 --script ssh-auth-methods 10.1.35.10\n...\n|   Supported authentication methods:\n|     publickey\n|_    password\n```\n\nPassword authentication is enabled. The shared account is **shiftlead**.",
+      "content": "OSINT revealed that Crestwood University's IT department uses a single shared SSH account for all helpdesk staff. The account name reflects the role — a two-word compound noun for the people who work in IT support.\n\nConfirm the SSH service is up and accepting password authentication:\n\n```\nnmap -p 22 --script ssh-auth-methods --script-args ssh.user=root 10.1.36.10\n```\n\nLook for `password` in the auth methods output — if it is listed, a dictionary attack is viable.\n\nThe university's internal wiki also named the account directly. It is the job title for **IT support staff**, written as a single lowercase compound word.\n\n**What is the username of the shared IT helpdesk account you will target?**",
+      "solution": "```\n$ nmap -p 22 --script ssh-auth-methods 10.1.36.10\n...\n|   Supported authentication methods:\n|     publickey\n|_    password\n```\n\nPassword authentication is enabled. The shared helpdesk account is **itstaff**.",
       "solution_penalized": false,
       "hints": [
         {
           "title": "What is the account naming convention?",
-          "content": "The account name is a job title — two words merged into one lowercase compound word. Think about what you call the person who leads a shift.",
+          "content": "The account name is a job title — two words merged into one lowercase compound word. Think about what you call the people who provide IT support to university staff.",
           "hint_penalty": 1,
           "order": 0
         },
         {
           "title": "The exact name",
-          "content": "The account is named `shiftlead`.",
+          "content": "The account is named `itstaff`.",
           "hint_penalty": 2,
           "order": 1
         }
@@ -62,15 +62,15 @@
       ]
     },
     {
-      "title": "Build a Targeted Wordlist and Crack the Password",
+      "title": "Crack the Password with Hydra",
       "level_type": "TRAINING_LEVEL",
       "order": 3,
       "estimated_duration": 12,
-      "answer": "Apex2024",
+      "answer": "Campus2024",
       "answer_variable_name": null,
       "variant_answers": false,
-      "content": "The leaked IT policy states passwords follow the pattern **CompanyName + Year**. That means the first word of the password is likely `Apex` (the company name) and the second part is the current or recent year.\n\nA targeted corporate wordlist (`corp-passwords.txt`) has been prepared on your attacker machine based on this intelligence. Run hydra against the SSH service:\n\n```\nhydra -l shiftlead -P corp-passwords.txt ssh://10.1.35.10\n```\n\nHydra will try each password in the list against the `shiftlead` account. Because the password follows the leaked policy pattern, it appears in the wordlist and hydra cracks it in seconds.\n\nIn a real engagement, you would build this wordlist yourself from OSINT: company name, founding year, product names, location, common suffixes (!, 1, 2024, @).\n\n**What password does hydra recover for the `shiftlead` account?**",
-      "solution": "```\n$ hydra -l shiftlead -P corp-passwords.txt ssh://10.1.35.10\n...\n[22][ssh] host: 10.1.35.10   login: shiftlead   password: Apex2024\n1 of 1 target successfully completed, 1 valid password found\n```\n\nThe recovered password is **Apex2024** — exactly the CompanyName + Year pattern the policy described.",
+      "content": "You know the account (`itstaff`) and the password convention: *CampusKeyword + Year*. That means the password likely starts with a word related to the university campus and ends with a recent year.\n\nA targeted campus-themed wordlist (`campus-passwords.txt`) has been prepared on your attacker machine. Run hydra:\n\n```\nhydra -l itstaff -P campus-passwords.txt ssh://10.1.36.10\n```\n\nHydra tries each password against the `itstaff` account. Because the IT department followed the predictable convention, the password is in the list and hydra cracks it in seconds.\n\nIn a real engagement you would build this wordlist yourself: university name, campus buildings, mascot, founding year, common suffixes (!, 1, 2024, @).\n\n**What password does hydra recover for the `itstaff` account?**",
+      "solution": "```\n$ hydra -l itstaff -P campus-passwords.txt ssh://10.1.36.10\n...\n[22][ssh] host: 10.1.36.10   login: itstaff   password: Campus2024\n1 of 1 target successfully completed, 1 valid password found\n```\n\nThe recovered password is **Campus2024** — exactly the CampusKeyword + Year pattern the wiki described.",
       "solution_penalized": true,
       "hints": [
         {
@@ -81,13 +81,13 @@
         },
         {
           "title": "What pattern should the password follow?",
-          "content": "According to the leaked policy: CompanyName + Year. The company is Apex. Try combinations like Apex2024, Apex2023, Apex1, etc.",
+          "content": "According to the wiki: CampusKeyword + Year. The campus keyword is related to the word 'campus'. Try combinations like Campus2024, Campus2023, Campus1, etc.",
           "hint_penalty": 4,
           "order": 1
         },
         {
           "title": "The exact password",
-          "content": "The password is `Apex2024` — the company name with the current year appended, no spaces or special characters.",
+          "content": "The password is `Campus2024` — the campus keyword with the current year appended, no spaces or special characters.",
           "hint_penalty": 5,
           "order": 2
         }
@@ -100,20 +100,20 @@
       ]
     },
     {
-      "title": "Log In and Retrieve the Shift Report",
+      "title": "Log In and Retrieve the Ticket Export",
       "level_type": "TRAINING_LEVEL",
       "order": 4,
       "estimated_duration": 5,
-      "answer": "WMG{fr31ght_acc3ss_c0mp4ny_n4m3_p4ss}",
+      "answer": "WMG{c4mpus_pw_t00_pr3d1ct4bl3}",
       "answer_variable_name": null,
       "variant_answers": false,
-      "content": "You have the credentials: `shiftlead` / `Apex2024`. Use them to log in over SSH and read the confidential shift report.\n\n```\nssh shiftlead@10.1.35.10\n# password: Apex2024\ncat ~/shift-report.txt\n```\n\nOr in a single non-interactive command:\n\n```\nsshpass -p 'Apex2024' ssh -o StrictHostKeyChecking=no shiftlead@10.1.35.10 'cat ~/shift-report.txt'\n```\n\nIn a real engagement this shared account would give access to the operations server and every shift supervisor's working files — because they all use the same credentials.\n\n**Submit the flag from `shift-report.txt`.**",
-      "solution": "```\n$ sshpass -p 'Apex2024' ssh -o StrictHostKeyChecking=no shiftlead@10.1.35.10 'cat ~/shift-report.txt'\nWMG{fr31ght_acc3ss_c0mp4ny_n4m3_p4ss}\n```",
+      "content": "You have the credentials: `itstaff` / `Campus2024`. Use them to log in over SSH and read the confidential helpdesk ticket export.\n\n```\nssh itstaff@10.1.36.10\n# password: Campus2024\ncat ~/ticket-export.txt\n```\n\nOr in a single non-interactive command:\n\n```\nsshpass -p 'Campus2024' ssh -o StrictHostKeyChecking=no itstaff@10.1.36.10 'cat ~/ticket-export.txt'\n```\n\nIn a real engagement this shared account would expose every open helpdesk ticket, including requests from staff containing passwords, internal system details, and personal data — all because of one predictable credential.\n\n**Submit the flag from `ticket-export.txt`.**",
+      "solution": "```\n$ sshpass -p 'Campus2024' ssh -o StrictHostKeyChecking=no itstaff@10.1.36.10 'cat ~/ticket-export.txt'\nWMG{c4mpus_pw_t00_pr3d1ct4bl3}\n```",
       "solution_penalized": true,
       "hints": [
         {
           "title": "Where is the flag?",
-          "content": "Log in as `shiftlead` and read `~/shift-report.txt`. The flag is the only line in that file.",
+          "content": "Log in as `itstaff` and read `~/ticket-export.txt`. The flag is the only line in that file.",
           "hint_penalty": 10,
           "order": 0
         },
@@ -154,15 +154,15 @@
         },
         {
           "question_type": "MCQ",
-          "text": "Before this game, had you built a targeted password wordlist from OSINT?",
+          "text": "Before this game, had you built a targeted wordlist from OSINT clues?",
           "points": 0,
           "penalty": 0,
           "order": 1,
           "answer_required": true,
           "choices": [
-            { "text": "Yes, I do this regularly",             "correct": true, "order": 0 },
+            { "text": "Yes, I do this regularly",              "correct": true, "order": 0 },
             { "text": "I understood the concept but not tried", "correct": true, "order": 1 },
-            { "text": "No, this was completely new",           "correct": true, "order": 2 }
+            { "text": "No, this was completely new",            "correct": true, "order": 2 }
           ]
         },
         {
@@ -173,10 +173,10 @@
           "order": 2,
           "answer_required": true,
           "choices": [
-            { "text": "Very clear",         "correct": true, "order": 0 },
-            { "text": "Mostly clear",        "correct": true, "order": 1 },
-            { "text": "Confusing at times",  "correct": true, "order": 2 },
-            { "text": "Hard to follow",      "correct": true, "order": 3 }
+            { "text": "Very clear",        "correct": true, "order": 0 },
+            { "text": "Mostly clear",       "correct": true, "order": 1 },
+            { "text": "Confusing at times", "correct": true, "order": 2 },
+            { "text": "Hard to follow",     "correct": true, "order": 3 }
           ]
         },
         {

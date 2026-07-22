@@ -1,16 +1,16 @@
 ---
-# Game: SSH Weak Password Attack (v3) — Apex Logistics
+# Game: SSH Weak Password Attack (v3) — Crestwood University
 #
-# The shared "shiftlead" account at Apex Logistics uses a weak password that
-# follows the company's unofficial pattern: CompanyName + Year. This account
-# appears in a corporate-themed password list, so it falls to a quick hydra
-# dictionary attack. The flag is in the account's home directory.
-- name: Deploy SSH Weak Password (v3) scenario
+# The shared "itstaff" helpdesk account at Crestwood University uses a password
+# matching the university's unofficial convention: OrgName + Year.  This account
+# appears in a campus-themed wordlist, so it falls to a hydra dictionary attack.
+# The flag is an exported helpdesk ticket in the account's home directory.
+- name: Deploy SSH Weak Password (v3) scenario — Crestwood University
   hosts: cyberrange
   vars:
-    op_user: shiftlead
-    op_password: "Apex2024"
-    flag_content: "WMG{fr31ght_acc3ss_c0mp4ny_n4m3_p4ss}"
+    op_user: itstaff
+    op_password: "Campus2024"
+    flag_content: "WMG{c4mpus_pw_t00_pr3d1ct4bl3}"
 
   tasks:
     - name: Ensure sshd allows password authentication
@@ -19,35 +19,35 @@
         regexp: '^#?PasswordAuthentication'
         line: 'PasswordAuthentication yes'
 
-    - name: Create shift lead account
+    - name: Create IT helpdesk staff account
       ansible.builtin.user:
         name: "{{ op_user }}"
         shell: /bin/bash
         create_home: yes
-        comment: "Apex Logistics — Shift Lead Operations"
+        comment: "Crestwood University — IT Helpdesk Staff"
         state: present
 
-    - name: Set shift lead password to a weak corporate value (intentional vulnerability)
+    - name: Set IT staff password to a weak institutional value (intentional vulnerability)
       ansible.builtin.shell: "echo '{{ op_user }}:{{ op_password }}' | chpasswd"
       changed_when: false
 
-    - name: Deploy corporate password wordlist for dictionary attack
+    - name: Deploy campus password wordlist for dictionary attack
       ansible.builtin.copy:
         src: files/wordlist.txt
-        dest: "/home/{{ op_user }}/corp-passwords.txt"
+        dest: "/home/{{ op_user }}/campus-passwords.txt"
         owner: "{{ op_user }}"
         group: "{{ op_user }}"
         mode: '0644'
 
-    - name: Plant the flag in the shift lead's home directory
+    - name: Plant the flag in the IT staff home directory
       ansible.builtin.copy:
         content: "{{ flag_content }}\n"
-        dest: "/home/{{ op_user }}/shift-report.txt"
+        dest: "/home/{{ op_user }}/ticket-export.txt"
         owner: "{{ op_user }}"
         group: "{{ op_user }}"
         mode: '0600'
 
-    - name: Restrict shift lead home directory to owner only
+    - name: Restrict IT staff home directory to owner only
       ansible.builtin.file:
         path: "/home/{{ op_user }}"
         owner: "{{ op_user }}"
