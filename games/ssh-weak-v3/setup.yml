@@ -1,0 +1,55 @@
+---
+# Game: SSH Weak Password Attack (v3) — Apex Logistics
+#
+# The shared "shiftlead" account at Apex Logistics uses a weak password that
+# follows the company's unofficial pattern: CompanyName + Year. This account
+# appears in a corporate-themed password list, so it falls to a quick hydra
+# dictionary attack. The flag is in the account's home directory.
+- name: Deploy SSH Weak Password (v3) scenario
+  hosts: cyberrange
+  vars:
+    op_user: shiftlead
+    op_password: "Apex2024"
+    flag_content: "WMG{fr31ght_acc3ss_c0mp4ny_n4m3_p4ss}"
+
+  tasks:
+    - name: Ensure sshd allows password authentication
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication yes'
+
+    - name: Create shift lead account
+      ansible.builtin.user:
+        name: "{{ op_user }}"
+        shell: /bin/bash
+        create_home: yes
+        comment: "Apex Logistics — Shift Lead Operations"
+        state: present
+
+    - name: Set shift lead password to a weak corporate value (intentional vulnerability)
+      ansible.builtin.shell: "echo '{{ op_user }}:{{ op_password }}' | chpasswd"
+      changed_when: false
+
+    - name: Deploy corporate password wordlist for dictionary attack
+      ansible.builtin.copy:
+        src: files/wordlist.txt
+        dest: "/home/{{ op_user }}/corp-passwords.txt"
+        owner: "{{ op_user }}"
+        group: "{{ op_user }}"
+        mode: '0644'
+
+    - name: Plant the flag in the shift lead's home directory
+      ansible.builtin.copy:
+        content: "{{ flag_content }}\n"
+        dest: "/home/{{ op_user }}/shift-report.txt"
+        owner: "{{ op_user }}"
+        group: "{{ op_user }}"
+        mode: '0600'
+
+    - name: Restrict shift lead home directory to owner only
+      ansible.builtin.file:
+        path: "/home/{{ op_user }}"
+        owner: "{{ op_user }}"
+        group: "{{ op_user }}"
+        mode: '0700'

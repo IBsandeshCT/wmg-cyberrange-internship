@@ -1,3 +1,12 @@
+## Task: ssh-weak-v3 game (2026-07-22)
+Plan: Fresh weak-SSH-password variant (Apex Logistics, OSINT-targeted wordlist) — COMPLETE, verify.sh PASS, idempotent
+### Facts
+- 12 working games: ssh-weak-password, shellshock, network-recon, ftp-anon, suid-privesc, sqli-login, dir-traversal, xss-stored, ssh-weak-v2, sqli-v2, privesc-v2, ssh-weak-v3
+- verify-all.sh passes 12/12 at 100%
+- ssh-weak-v3: user shiftlead/Apex2024; flag ~/shift-report.txt; corp-passwords.txt wordlist (logistics-themed); teaches OSINT-informed password targeting
+- ssh-weak-v3 distinct from ssh-weak-password (student/password123) and ssh-weak-v2 (deckhand/Sailor2024)
+- CyberRange repo: ~/wmg-ssh-weak-v3-cyberrange/ (topology 10.1.35.0/24 + provisioning)
+
 ## Task: privesc-v2 game (2026-07-22)
 Plan: Fresh privesc via sudo misconfiguration (NOPASSWD find -exec) — COMPLETE, verify.sh PASS, idempotent
 ### Facts

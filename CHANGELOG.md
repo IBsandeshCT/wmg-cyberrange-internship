@@ -1,3 +1,12 @@
+## 2026-07-22 — ssh-weak-v3 game
+- Changed: added games/ssh-weak-v3/ (setup.yml + files/wordlist.txt + training.json)
+- Changed: added agent-harness/exploits/ssh-weak-v3.exploit
+- Changed: added ~/wmg-ssh-weak-v3-cyberrange/ CyberRange deployment repo (topology 10.1.35.0/24)
+- Outcome: verify.sh PASS on first attempt (8.2s), idempotent on second run (changed=0)
+- Outcome: verify-all.sh 12/12 PASS, 100% success rate
+- Design: Apex Logistics scenario; shiftlead/Apex2024; teaching angle is OSINT-driven targeted wordlist construction (company-name + year policy). Distinct from ssh-weak-password (generic) and ssh-weak-v2 (maritime)
+- Dead ends: none
+
 ## 2026-07-22 — privesc-v2 game
 - Changed: added games/privesc-v2/ (setup.yml + training.json)
 - Changed: added agent-harness/exploits/privesc-v2.exploit
