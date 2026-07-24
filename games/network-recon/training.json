@@ -1,0 +1,328 @@
+{
+  "title": "Network Reconnaissance — Portsmith Logistics",
+  "description": "Given only an IP address, enumerate all services on a mystery host, distinguish decoys from the real target, and retrieve the hidden flag.",
+  "prerequisites": [],
+  "outcomes": [
+    "Use nmap to perform comprehensive port scans and enumerate all listening services on a target.",
+    "Interact with FTP, HTTP, and custom TCP services to evaluate their content and purpose.",
+    "Distinguish between decoy services and the service that holds the objective.",
+    "Use netcat to connect to non-standard ports and read banner information."
+  ],
+  "state": "UNRELEASED",
+  "show_stepper_bar": true,
+  "variant_sandboxes": false,
+  "estimated_duration": 45,
+  "levels": [
+    {
+      "title": "Introduction",
+      "level_type": "INFO_LEVEL",
+      "order": 0,
+      "estimated_duration": 0,
+      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or search for the technique online.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. Your latest engagement has just landed on your desk with the leanest brief you have ever seen: a single IP address, a company name — **Portsmith Logistics Hub** — and one line of instruction: 'Tell us what's on this machine and whether anything sensitive is exposed.'\n\nNo port list. No service inventory. No architecture diagram. Just an IP.\n\nThis is not unusual. Organisations frequently lose track of what they are running. A server gets stood up for one purpose, a second service gets added by a different team, a third gets bolted on during an incident, and within a year nobody can answer the question 'what exactly is listening on that box?' Portsmith Logistics has exactly this problem: their IT documentation was lost in a cloud migration, and the server in question has been quietly running ever since.\n\nYour job is to do what penetration testers do at the start of every engagement: **enumerate**. Find every open port. Connect to every service. Understand what each one is doing and whether it exposes anything it should not. Not all services you find will be interesting — some are decoys or administrative placeholders. Your skill as a tester is in reading the signals correctly and following the right trail.\n\nRecon is more than scanning. It is interpretation. Anyone can run nmap and get a port list. The value is in knowing what to do with that list: which services to probe, which responses to read carefully, and which threads to ignore. By the end of this exercise you will have found three listening services, evaluated each one, and extracted the flag from the one that actually matters.\n\nRemember: in a real engagement, a full port scan reveals the attack surface. A quick scan of common ports leaves gaps. Always scan all 65535 ports when completeness is required."
+    },
+    {
+      "title": "Get Access",
+      "level_type": "ACCESS_LEVEL",
+      "order": 1,
+      "estimated_duration": 0,
+      "passkey": "start",
+      "cloud_content": "SSH to your attacker machine at **10.1.29.23** using your assigned credentials. Your target is the Portsmith Logistics server at **10.1.29.10** — no other information is provided.\n\nDo not attack anything outside this sandbox. Submit **start** to begin.",
+      "local_content": "The target is running locally. You may scan and connect to **127.0.0.1** on any port.\n\nSubmit **start** to begin."
+    },
+    {
+      "title": "Count the Open Ports",
+      "level_type": "TRAINING_LEVEL",
+      "order": 2,
+      "estimated_duration": 10,
+      "answer": "3",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Your first task is a full port scan of the Portsmith server. A default nmap scan only checks the top 1000 most common ports — but this server may be running services on non-standard ports. Use the `-p-` flag to scan all 65535 ports:\n\n```\nnmap -p- -T4 10.1.29.10\n```\n\nThe `-T4` flag sets a faster timing template to speed up the scan. You may also add `-sV` for service version detection, though the full port scan is the priority:\n\n```\nnmap -p- -sV -T4 10.1.29.10\n```\n\nCount the number of ports listed as `open` in the output. Do not count ports listed as `filtered` or `closed`.\n\nThis count matters: if you only scan common ports, you will miss the non-standard service and fail to find the flag.\n\n**How many ports are open on the Portsmith Logistics server?**",
+      "solution": "```\n$ nmap -p- -sV -T4 10.1.29.10\nPORT     STATE SERVICE    VERSION\n21/tcp   open  ftp        vsftpd ...\n80/tcp   open  http       Apache httpd ...\n8888/tcp open  http-alt   Python SimpleHTTP... (or similar)\n```\n\nThree ports are open: **21** (FTP), **80** (HTTP), and **8888** (custom service). The answer is **3**.",
+      "solution_penalized": false,
+      "hints": [
+        {
+          "title": "How do I scan all ports?",
+          "content": "Add -p- to nmap to scan all 65535 TCP ports: nmap -p- -T4 10.1.29.10. A default nmap scan only checks the most common 1000 ports — use -p- to be comprehensive.",
+          "hint_penalty": 5,
+          "order": 0
+        },
+        {
+          "title": "What counts as open?",
+          "content": "Count only rows showing STATE: open in the nmap output. Filtered and closed ports do not count. Look at the PORT column for each open port.",
+          "hint_penalty": 10,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 50,
+      "mitre_techniques": [
+        { "technique_key": "TA0043.T1046" }
+      ]
+    },
+    {
+      "title": "Probe the FTP Service",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 8,
+      "answer": "readme.txt",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Port 21 is FTP. FTP (File Transfer Protocol) is a standard protocol for transferring files between computers. Many FTP servers are configured to allow **anonymous login** — connecting without a real account, using the username `anonymous` and any value as the password (often your email address). Misconfigured anonymous FTP servers can expose sensitive files to anyone who connects.\n\nConnect to the FTP service and list the available files. You can use curl for a quick anonymous FTP listing:\n\n```\ncurl ftp://10.1.29.10/ --user anonymous:\n```\n\nThe trailing colon after `anonymous:` leaves the password empty, which anonymous FTP servers accept. Alternatively, use the classic ftp client:\n\n```\nftp 10.1.29.10\n# Username: anonymous\n# Password: (press Enter)\nls\n```\n\nYou are looking for a filename in the directory listing. Note what is available in the FTP root.\n\n**What filename is available in the FTP directory?**",
+      "solution": "```\n$ curl ftp://10.1.29.10/ --user anonymous:\nreadme.txt\n```\n\nThe FTP directory contains a single file: **readme.txt**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How do I use curl for FTP?",
+          "content": "curl ftp://TARGET/ --user anonymous: lists the FTP root directory. The colon after anonymous: leaves the password blank, which anonymous FTP servers accept.",
+          "hint_penalty": 10,
+          "order": 0
+        },
+        {
+          "title": "What should I look for?",
+          "content": "The FTP directory listing will show filenames. The file in this directory is a text file with a common descriptive name.",
+          "hint_penalty": 20,
+          "order": 1
+        },
+        {
+          "title": "The filename",
+          "content": "The file is named readme.txt — download it with: curl ftp://10.1.29.10/readme.txt --user anonymous:",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1135" }
+      ]
+    },
+    {
+      "title": "Read the FTP File",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 8,
+      "answer": "IT Ops",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You found `readme.txt` in the FTP directory. Download and read it:\n\n```\ncurl ftp://10.1.29.10/readme.txt --user anonymous:\n```\n\nRead the content carefully. In a real engagement, every file found during enumeration is a potential source of intelligence — employee names, internal hostnames, email addresses, or clues about the organisation's structure.\n\nThe readme is a brief informational document about the FTP share's purpose. It tells you what this FTP server was set up for and who manages it. Note the signature at the bottom — it reveals which team is responsible for this service.\n\n**Who signed the readme.txt? (What team or group is identified at the end of the file?)**",
+      "solution": "```\n$ curl ftp://10.1.29.10/readme.txt --user anonymous:\nWelcome to the WMG anonymous FTP drop.\n\nThis share is for exchanging large files with external partners. It is\nnot used for anything sensitive.\n\n- IT Ops\n```\n\nThe file is signed by **IT Ops** — the IT Operations team.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to download the file",
+          "content": "Run: curl ftp://10.1.29.10/readme.txt --user anonymous: — this downloads and prints the file content to your terminal.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What to look for",
+          "content": "Read the full file content. The signature is at the bottom, preceded by a dash. It identifies who wrote the readme.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The answer",
+          "content": "The readme is signed '- IT Ops'. The answer is: IT Ops",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1135" }
+      ]
+    },
+    {
+      "title": "Connect to the Custom Service",
+      "level_type": "TRAINING_LEVEL",
+      "order": 5,
+      "estimated_duration": 8,
+      "answer": "WMG-TELEMETRY-SVC",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have examined the FTP service (decoy) and the HTTP service on port 80 is also a decoy — it shows a placeholder 'under construction' page with nothing useful. That leaves port **8888**: the non-standard port you found in the full scan.\n\nNon-standard ports often run custom-built services. The best tool for connecting to an arbitrary TCP service and reading its banner is **netcat** (`nc`):\n\n```\necho | nc -w3 10.1.29.10 8888\n```\n\nBreaking this down:\n- `echo |` — sends an empty line to trigger the service to respond\n- `nc -w3` — netcat with a 3-second timeout\n- `10.1.29.10 8888` — connect to this host on port 8888\n\nThe service will send a banner when you connect. Read it carefully — it identifies the service by name. Look for the service name in the banner.\n\n**What is the name of the service running on port 8888, as shown in the banner?**",
+      "solution": "```\n$ echo | nc -w3 10.1.29.10 8888\n==============================================\n WMG-TELEMETRY-SVC build 2019.03 (internal use)\n==============================================\nWMG{r3c0n_1s_m0r3_th4n_just_p0rt_sc4nning}\n```\n\nThe service is called **WMG-TELEMETRY-SVC** — a custom internal telemetry service.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How do I connect to a raw TCP service?",
+          "content": "Use netcat: nc TARGET PORT. Add -w3 for a 3-second timeout so it disconnects automatically. Prefix with echo | to send an empty line that triggers the banner: echo | nc -w3 10.1.29.10 8888",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What does the banner look like?",
+          "content": "The banner is a multi-line header surrounded by equals signs. The service name appears on the second line, between the separators.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The service name",
+          "content": "The service is called WMG-TELEMETRY-SVC. It appears on the second line of the banner between the === separators.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0043.T1046" }
+      ]
+    },
+    {
+      "title": "Retrieve the Flag",
+      "level_type": "TRAINING_LEVEL",
+      "order": 6,
+      "estimated_duration": 5,
+      "answer": "WMG{r3c0n_1s_m0r3_th4n_just_p0rt_sc4nning}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "The WMG-TELEMETRY-SVC banner on port 8888 contains more than just a service name. Read the full banner output from your netcat connection:\n\n```\necho | nc -w3 10.1.29.10 8888\n```\n\nAfter the service header, the banner includes a data field — the flag stored in this internal service. In a real engagement, an exposed internal telemetry or monitoring service like this could leak internal configuration data, API keys, system health metrics, or credentials that attackers can use to pivot deeper into the network.\n\nThe FTP readme claimed the FTP server 'is not used for anything sensitive' — which was true. The HTTP page was a placeholder. The real sensitive data was on the non-standard port that a quick port scan would have missed entirely.\n\nThis is the lesson: **thorough reconnaissance beats targeted guessing**. Scan all ports. Evaluate every service. The flag is in the last place a lazy attacker would look.\n\n**Submit the flag from the WMG-TELEMETRY-SVC banner.**",
+      "solution": "```\n$ echo | nc -w3 10.1.29.10 8888\n==============================================\n WMG-TELEMETRY-SVC build 2019.03 (internal use)\n==============================================\nWMG{r3c0n_1s_m0r3_th4n_just_p0rt_sc4nning}\n```",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Where is the flag in the banner?",
+          "content": "Run echo | nc -w3 10.1.29.10 8888. After the === header lines, the banner contains a WMG{...} string — that is the flag.",
+          "hint_penalty": 20,
+          "order": 0
+        },
+        {
+          "title": "What format is the flag?",
+          "content": "The flag starts with WMG{ and ends with }. It appears as the last line of the banner output from port 8888.",
+          "hint_penalty": 30,
+          "order": 1
+        },
+        {
+          "title": "The exact flag",
+          "content": "Read the full output from: echo | nc -w3 10.1.29.10 8888. The flag is the last line of the banner.",
+          "hint_penalty": 40,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 150,
+      "mitre_techniques": [
+        { "technique_key": "TA0009.T1005" }
+      ]
+    },
+    {
+      "title": "Identify the Build Version",
+      "level_type": "TRAINING_LEVEL",
+      "order": 7,
+      "estimated_duration": 5,
+      "answer": "2019.03",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Go back and read the WMG-TELEMETRY-SVC banner again carefully:\n\n```\necho | nc -w3 10.1.29.10 8888\n```\n\nBeyond the flag, the banner reveals something else: it identifies itself as an internal service and includes a **build version** in the header line. Version numbers in service banners are significant findings in a penetration test — they tell you exactly what software version is running, which allows you to look up whether known vulnerabilities exist for that specific build.\n\nIn a real engagement you would cross-reference any version number against CVE databases, vendor advisories, and exploit databases to determine if a known exploit is available for this exact build.\n\nLook at the second line of the banner (between the === separators). It includes the service name followed by the word 'build' and a version string.\n\n**What is the build version of the WMG-TELEMETRY-SVC as shown in the banner?**",
+      "solution": "```\n$ echo | nc -w3 10.1.29.10 8888\n==============================================\n WMG-TELEMETRY-SVC build 2019.03 (internal use)\n==============================================\n...\n```\n\nThe build version is **2019.03**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Where is the version in the banner?",
+          "content": "Look at the second line of the banner — the line between the two === separator lines. After the service name, it says 'build' followed by the version number.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What format is the version?",
+          "content": "The version follows a YYYY.MM format — year.month. It appears right after the word 'build' in the banner header.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The version string",
+          "content": "The build version is 2019.03 — indicating this service was built in March 2019 and has not been updated since.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0043.T1592" }
+      ]
+    },
+    {
+      "title": "Feedback",
+      "level_type": "ASSESSMENT_LEVEL",
+      "order": 8,
+      "estimated_duration": 5,
+      "assessment_type": "QUESTIONNAIRE",
+      "instructions": "Please answer these questions to help us improve this game.",
+      "questions": [
+        {
+          "question_type": "MCQ",
+          "text": "How difficult did you find this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 0,
+          "answer_required": true,
+          "choices": [
+            { "text": "Too easy",      "correct": true, "order": 0 },
+            { "text": "About right",   "correct": true, "order": 1 },
+            { "text": "Too difficult", "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Before this game, did you know about scanning non-standard ports?",
+          "points": 0,
+          "penalty": 0,
+          "order": 1,
+          "answer_required": true,
+          "choices": [
+            { "text": "Yes, I always scan all ports",        "correct": true, "order": 0 },
+            { "text": "I knew but usually skipped it",       "correct": true, "order": 1 },
+            { "text": "No, I only scanned common ports",     "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "How clear were the level instructions?",
+          "points": 0,
+          "penalty": 0,
+          "order": 2,
+          "answer_required": true,
+          "choices": [
+            { "text": "Very clear",         "correct": true, "order": 0 },
+            { "text": "Mostly clear",        "correct": true, "order": 1 },
+            { "text": "Confusing at times",  "correct": true, "order": 2 },
+            { "text": "Hard to follow",      "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Which nmap flag scans ALL 65535 ports instead of just the top 1000?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": true,
+          "choices": [
+            { "text": "-p- (all ports)",        "correct": true, "order": 0 },
+            { "text": "--full-scan",             "correct": true, "order": 1 },
+            { "text": "-A (aggressive scan)",    "correct": true, "order": 2 },
+            { "text": "--all-ports",             "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "FFQ",
+          "text": "What would you change or add to improve this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 4,
+          "answer_required": false,
+          "choices": []
+        }
+      ]
+    }
+  ]
+}
