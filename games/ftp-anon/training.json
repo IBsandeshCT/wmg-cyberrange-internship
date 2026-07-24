@@ -1,0 +1,328 @@
+{
+  "title": "Anonymous FTP Access — Databridge Consulting",
+  "description": "Discover a misconfigured FTP server that allows anonymous login and exposes a flag file in its public directory.",
+  "prerequisites": [],
+  "outcomes": [
+    "Use nmap to identify an FTP service and read its version banner.",
+    "Authenticate to an FTP server using anonymous credentials.",
+    "Navigate the FTP directory structure and identify accessible files.",
+    "Download a file from an anonymous FTP server and explain why this configuration is a security risk."
+  ],
+  "state": "UNRELEASED",
+  "show_stepper_bar": true,
+  "variant_sandboxes": false,
+  "estimated_duration": 35,
+  "levels": [
+    {
+      "title": "Introduction",
+      "level_type": "INFO_LEVEL",
+      "order": 0,
+      "estimated_duration": 0,
+      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or search for the technique online.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. Your client, **Databridge Consulting**, is a mid-sized data analytics firm that has engaged you to audit their external-facing infrastructure before their upcoming ISO 27001 certification review. The engagement scope includes all servers on the production network range you have been handed.\n\nDuring initial reconnaissance, one server in the range returns a response on a port associated with an old file transfer protocol — a protocol so old that its original RFC dates to 1971. FTP (File Transfer Protocol) has been considered insecure for decades: it transmits all data, including credentials, in plaintext over the network. Despite this, organisations still run FTP servers because they are simple to set up and widely understood.\n\nThe particularly dangerous variant is **anonymous FTP**: a configuration that allows any client to log in without a password, using the username `anonymous`. In the 1990s, anonymous FTP was widely used to distribute public software and documents. In the 2020s, it is almost always a misconfiguration — either the administrator forgot to disable anonymous access, or they assumed 'anonymous' meant 'safe for public access' without thinking about what files they were exposing.\n\nDatabridge's IT manager, who set up this server in 2003 with the reasoning that 'it's only for internal file sharing and nobody outside would know about it', clearly never considered that a port scanner takes seconds to find it. The server is reachable from the public internet. Anyone who scans the company's IP range will find it.\n\nYour mission: identify the FTP service, connect anonymously, enumerate the directory structure, retrieve the flag file, and document the vulnerability. The fix is simple — disable anonymous access — but first you need to prove the risk is real."
+    },
+    {
+      "title": "Get Access",
+      "level_type": "ACCESS_LEVEL",
+      "order": 1,
+      "estimated_duration": 0,
+      "passkey": "start",
+      "cloud_content": "SSH to your attacker machine at **10.1.26.23** using your assigned credentials. Your target is the Databridge Consulting file server at **10.1.26.10**.\n\nDo not attack anything outside this sandbox. Submit **start** to begin.",
+      "local_content": "The target FTP service is running locally. You may connect to **127.0.0.1** on the FTP port.\n\nSubmit **start** to begin."
+    },
+    {
+      "title": "Identify the FTP Port",
+      "level_type": "TRAINING_LEVEL",
+      "order": 2,
+      "estimated_duration": 8,
+      "answer": "21",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Begin by scanning the Databridge Consulting server to identify what services are listening. Run an nmap version scan:\n\n```\nnmap -sV 10.1.26.10\n```\n\nThe output will show open ports, the service name associated with each port, and the software version. Look for the port associated with FTP — the File Transfer Protocol. FTP was one of the first internet protocols and has a well-known default port that has not changed since the original RFC.\n\nNote the port number shown in the nmap output for the FTP service. This is the port your subsequent commands will connect to.\n\n**What port is the FTP service listening on?**",
+      "solution": "```\n$ nmap -sV 10.1.26.10\nPORT   STATE SERVICE VERSION\n21/tcp open  ftp     vsftpd ...\n```\n\nFTP is listening on port **21** — the standard FTP control port.",
+      "solution_penalized": false,
+      "hints": [
+        {
+          "title": "What port does FTP use by default?",
+          "content": "FTP uses port 21 for the control connection (commands and responses) and port 20 for data transfers. Run nmap -sV and look for the row with 'ftp' in the SERVICE column.",
+          "hint_penalty": 5,
+          "order": 0
+        },
+        {
+          "title": "The answer",
+          "content": "FTP uses port 21. Run nmap -sV 10.1.26.10 and confirm the ftp service on port 21/tcp.",
+          "hint_penalty": 10,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 50,
+      "mitre_techniques": [
+        { "technique_key": "TA0043.T1046" }
+      ]
+    },
+    {
+      "title": "Log In Anonymously",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 8,
+      "answer": "anonymous",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "FTP supports anonymous login as a built-in feature. When the server has anonymous access enabled, clients can connect using the special username `anonymous` with any value as the password (by convention, your email address — but most servers accept anything, including an empty string).\n\nTry connecting to the FTP server. The FTP control connection banner will confirm whether the server accepts anonymous login:\n\n```\nftp 10.1.26.10\n```\n\nWhen prompted for a username, enter the special anonymous access username. When prompted for a password, press Enter (empty password).\n\nAlternatively, you can test anonymous access non-interactively using curl:\n\n```\ncurl ftp://10.1.26.10/ --user anonymous:\n```\n\nIf this returns a directory listing rather than an authentication error, the server accepts anonymous login.\n\n**What username do you use to log in to a misconfigured FTP server without a real account?**",
+      "solution": "The username for anonymous FTP access is **anonymous**. Most FTP servers configured for public access accept this username with any password, including an empty one.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What is the anonymous FTP username?",
+          "content": "The universally recognised anonymous FTP username is literally the word 'anonymous'. Some servers also accept 'ftp' as an alias. Try: curl ftp://10.1.26.10/ --user anonymous:",
+          "hint_penalty": 10,
+          "order": 0
+        },
+        {
+          "title": "What password does anonymous FTP use?",
+          "content": "Anonymous FTP typically accepts any password, including an empty one. In curl, use --user anonymous: (with a colon and no password). In the interactive ftp client, press Enter when prompted.",
+          "hint_penalty": 20,
+          "order": 1
+        },
+        {
+          "title": "The username",
+          "content": "The username is 'anonymous' — all lowercase, no spaces.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0001.T1078.001" }
+      ]
+    },
+    {
+      "title": "Navigate the FTP Directory",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 8,
+      "answer": "pub",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have logged in anonymously. Now enumerate the FTP directory structure. List the root FTP directory to see what is available:\n\n```\ncurl ftp://10.1.26.10/ --user anonymous:\n```\n\nThe output will show the contents of the FTP root directory. On this server, the anonymous user can access a subdirectory that follows a common FTP convention for publicly shared files — a short, familiar directory name commonly used on public FTP sites to separate publicly accessible files from other content.\n\nNote the name of the subdirectory shown in the root listing. You will need to navigate into it to find the flag.\n\n**What subdirectory is listed in the FTP root directory?**",
+      "solution": "```\n$ curl ftp://10.1.26.10/ --user anonymous:\ndrwxr-xr-x    2 root     root         4096 ... pub\n```\n\nThe subdirectory is **pub** — the conventional name for the publicly accessible directory on FTP servers.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How do I list the FTP root?",
+          "content": "Run: curl ftp://10.1.26.10/ --user anonymous: — note the trailing slash, which requests a directory listing from the FTP root.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What is the conventional public FTP directory name?",
+          "content": "The traditional name for the public files directory on anonymous FTP servers is 'pub' — short for 'public'. This convention dates back to the early days of internet FTP servers.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The directory name",
+          "content": "The subdirectory is named 'pub'. Navigate into it with: curl ftp://10.1.26.10/pub/ --user anonymous:",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1135" }
+      ]
+    },
+    {
+      "title": "Find the Flag File",
+      "level_type": "TRAINING_LEVEL",
+      "order": 5,
+      "estimated_duration": 8,
+      "answer": "flag.txt",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You found the `pub` subdirectory. List its contents to see what files are available:\n\n```\ncurl ftp://10.1.26.10/pub/ --user anonymous:\n```\n\nThe directory listing will show any files stored there. In a real engagement, misconfigured anonymous FTP servers have exposed everything from internal financial documents to customer databases — any file stored in the anonymous FTP root becomes publicly accessible to anyone who knows the server's address.\n\nOn this server, Databridge has stored a file in the public FTP directory that should absolutely not be publicly accessible. Note the filename shown in the directory listing.\n\n**What filename is in the pub/ directory?**",
+      "solution": "```\n$ curl ftp://10.1.26.10/pub/ --user anonymous:\n-rw-r--r--    1 root     root           32 ... flag.txt\n```\n\nThe file is **flag.txt** — a sensitive file stored where anyone can read it.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How do I list the pub directory?",
+          "content": "Run: curl ftp://10.1.26.10/pub/ --user anonymous: — add /pub/ to the URL to list the contents of the pub subdirectory.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What type of file is it?",
+          "content": "The file in the pub/ directory is a plain text file with a name that directly describes its contents. Text files on FTP servers are readable by anyone with anonymous access.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The filename",
+          "content": "The file is named flag.txt — download it with: curl ftp://10.1.26.10/pub/flag.txt --user anonymous:",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1083" }
+      ]
+    },
+    {
+      "title": "Download the Flag",
+      "level_type": "TRAINING_LEVEL",
+      "order": 6,
+      "estimated_duration": 5,
+      "answer": "WMG{anon_ftp_1s_a_s3curity_r1sk}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have located `flag.txt` in the `pub/` directory. Download it directly using curl:\n\n```\ncurl ftp://10.1.26.10/pub/flag.txt --user anonymous:\n```\n\nThe file downloads and its content is printed to stdout. The content is the flag.\n\nIn a real penetration test, this finding would be a **critical** severity issue. The anonymous FTP server is exposing files to the entire internet. An attacker does not need credentials, does not need to exploit any vulnerability — they just need to know the server's IP address and run a single curl command. If sensitive business data, customer records, or internal credentials had been stored in the FTP directory, the breach would have required no sophistication whatsoever.\n\nThe remediation is straightforward: disable anonymous FTP access in the vsftpd configuration by setting `anonymous_enable=NO`.\n\n**Submit the flag from flag.txt.**",
+      "solution": "```\n$ curl ftp://10.1.26.10/pub/flag.txt --user anonymous:\nWMG{anon_ftp_1s_a_s3curity_r1sk}\n```",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How do I download a specific file?",
+          "content": "Use: curl ftp://10.1.26.10/pub/flag.txt --user anonymous: — specify the full path including the pub/ subdirectory.",
+          "hint_penalty": 20,
+          "order": 0
+        },
+        {
+          "title": "What format is the flag?",
+          "content": "The flag starts with WMG{ and ends with }. It is the only content of the flag.txt file.",
+          "hint_penalty": 30,
+          "order": 1
+        },
+        {
+          "title": "The full command",
+          "content": "Run: curl ftp://10.1.26.10/pub/flag.txt --user anonymous: — the flag appears as the output.",
+          "hint_penalty": 40,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 150,
+      "mitre_techniques": [
+        { "technique_key": "TA0009.T1005" }
+      ]
+    },
+    {
+      "title": "Identify the FTP Software",
+      "level_type": "TRAINING_LEVEL",
+      "order": 7,
+      "estimated_duration": 5,
+      "answer": "vsftpd",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Every well-configured FTP server displays a banner when a client connects. This banner typically identifies the server software and sometimes the version. In a real engagement, knowing the exact FTP software and version allows you to check for known vulnerabilities in that specific build.\n\nConnect to the FTP service directly and read the connection banner:\n\n```\nftp 10.1.26.10\n```\n\nThe first line displayed after the connection is established is the FTP server's 220 banner. It identifies the software name — look for it in the format `220 (SoftwareName X.Y.Z)`.\n\nAlternatively, the nmap output from your initial scan also shows the FTP software in the VERSION column.\n\nNote the software name from the banner. Software names are important: a quick search of `<software-name> CVE` often reveals whether the exact version has known vulnerabilities that could be exploited further.\n\n**What FTP server software is running on the Databridge server?** (software name only, not the version)",
+      "solution": "```\n$ ftp 10.1.26.10\nConnected to 10.1.26.10.\n220 (vsFTPd 3.0.5)\nName (10.1.26.10:kali): \n```\n\nThe software is **vsftpd** — Very Secure FTP Daemon, the most common FTP server on Linux.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Where is the software name in the banner?",
+          "content": "When you connect with ftp 10.1.26.10, the first response is a 220 banner. It shows the software name in parentheses — for example: 220 (vsFTPd 3.0.5). The software name is the text before the version number.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What is the most common FTP server on Linux?",
+          "content": "The most common FTP server on Debian/Ubuntu Linux is vsftpd — 'Very Secure FTP Daemon'. Despite its name, anonymous access misconfiguration is a common finding.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The software name",
+          "content": "The software is vsftpd. It appears in the FTP 220 banner as (vsFTPd X.Y.Z) and in the nmap -sV output as the VERSION column value.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0043.T1592" }
+      ]
+    },
+    {
+      "title": "Feedback",
+      "level_type": "ASSESSMENT_LEVEL",
+      "order": 8,
+      "estimated_duration": 5,
+      "assessment_type": "QUESTIONNAIRE",
+      "instructions": "Please answer these questions to help us improve this game.",
+      "questions": [
+        {
+          "question_type": "MCQ",
+          "text": "How difficult did you find this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 0,
+          "answer_required": true,
+          "choices": [
+            { "text": "Too easy",      "correct": true, "order": 0 },
+            { "text": "About right",   "correct": true, "order": 1 },
+            { "text": "Too difficult", "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Before this game, were you aware that anonymous FTP could expose files?",
+          "points": 0,
+          "penalty": 0,
+          "order": 1,
+          "answer_required": true,
+          "choices": [
+            { "text": "Yes, I had seen it in real engagements", "correct": true, "order": 0 },
+            { "text": "I knew it was possible but not in detail", "correct": true, "order": 1 },
+            { "text": "No, this was completely new to me",       "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "How clear were the level instructions?",
+          "points": 0,
+          "penalty": 0,
+          "order": 2,
+          "answer_required": true,
+          "choices": [
+            { "text": "Very clear",         "correct": true, "order": 0 },
+            { "text": "Mostly clear",        "correct": true, "order": 1 },
+            { "text": "Confusing at times",  "correct": true, "order": 2 },
+            { "text": "Hard to follow",      "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "What is the correct way to fix anonymous FTP exposure?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": true,
+          "choices": [
+            { "text": "Set anonymous_enable=NO in vsftpd.conf",    "correct": true, "order": 0 },
+            { "text": "Move sensitive files to a different folder", "correct": true, "order": 1 },
+            { "text": "Block port 21 at the firewall",              "correct": true, "order": 2 },
+            { "text": "Use FTPS instead of FTP",                    "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "FFQ",
+          "text": "What would you change or add to improve this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 4,
+          "answer_required": false,
+          "choices": []
+        }
+      ]
+    }
+  ]
+}
