@@ -1,3 +1,19 @@
+## 2026-07-24 — training.json deep upgrade (all 11 games)
+- Changed: ssh-weak-password/training.json — created (9 levels), NovaTech Corp story, hydra/nmap, flag ~/flag.txt
+- Changed: shellshock/training.json — created (9 levels), CVE-2014-6271, User-Agent injection, www-data context
+- Changed: network-recon/training.json — created (9 levels), 3-port recon, FTP/HTTP/banner, WMG-TELEMETRY-SVC
+- Changed: ftp-anon/training.json — created (9 levels), anonymous FTP, /var/ftp/pub/flag.txt
+- Changed: suid-privesc/training.json — expanded 5→9 levels, SUID binary, NovaTech Solutions story
+- Changed: sqli-login/training.json — expanded 5→9 levels, Pinnacle Finance, auth bypass + alice enumeration
+- Changed: dir-traversal/training.json — expanded 5→9 levels, Caldwell & Webb, ../secrets/flag.txt, 403 on /etc/passwd
+- Changed: xss-stored/training.json — expanded 5→9 levels, Ironwood Recruitment, guestbook+bot+collect chain
+- Changed: ssh-weak-v2/training.json — expanded 5→9 levels, Halcyon Marine, deckhand/Sailor2024
+- Changed: sqli-v2/training.json — expanded 5→9 levels, Athenaeum Library, UNION note,note FROM librarian_notes
+- Changed: privesc-v2/training.json — expanded 5→9 levels, Meridian Systems, sudo find -exec, DevOps note
+- Outcome: verify-all.sh 13/13 PASS 100% (13 games, 148.9s total)
+- Dead ends: none — all 11 files written and validated on first attempt
+- Notes: no setup.yml/Ansible touched; ftp-anon IPs inferred (no CyberRange repo); all hint_penalty_sum < max_score; 11 individual commits
+
 ## 2026-07-22 — sqli-v3 game (boolean blind SQLi — Northgate Veterinary)
 - Changed: added games/sqli-v3/ (setup.yml + files/lookup.php + training.json)
 - Changed: added agent-harness/exploits/sqli-v3.exploit

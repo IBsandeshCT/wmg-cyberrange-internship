@@ -1,3 +1,13 @@
+## Task: training.json deep upgrade — all 11 games (2026-07-24)
+Plan: Expand all games from 5-level to 9-level training.json with immersive stories, MITRE techniques, 2-3 hints per level, traceability to setup.yml, and ASSESSMENT_LEVEL — COMPLETE, verify-all.sh 13/13 PASS
+### Facts
+- All 11 upgraded games: ssh-weak-password, shellshock, network-recon, ftp-anon, suid-privesc, sqli-login, dir-traversal, xss-stored, ssh-weak-v2, sqli-v2, privesc-v2
+- 4 new training.json (ssh-weak-password, shellshock, network-recon, ftp-anon); 7 expanded from 5→9 levels
+- Every level: MITRE ATT&CK technique_key, incorrect_answer_limit=10, hint_penalty_sum < max_score
+- Scoring: L2 sol_pen=false max_score=50; L3-L7 sol_pen=true max_score=100 (L6=150); ASSESSMENT max_score=0
+- verify-all.sh: 13 games 13/13 PASS 100% (includes sqli-v3 and ssh-weak-v3 which are unrelated)
+- No setup.yml or Ansible files touched — only training.json modified
+
 ## Task: sqli-v3 game (2026-07-22)
 Plan: Fresh boolean-based blind SQLi (Northgate Veterinary Clinic) — COMPLETE, verify.sh PASS
 ### Facts
