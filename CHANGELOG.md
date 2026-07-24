@@ -1,3 +1,12 @@
+## 2026-07-24 — documentation update (all docs to current state)
+- Changed: README.md — complete rewrite to reflect 13 games, research question, model comparison, architecture, CyberRange repos, generation workflow
+- Changed: agent-harness/README.md — updated for 13/13 PASS, generate-and-verify.sh section, full exploit list, game result table
+- Changed: DESIGN.md — updated task to reflect docs update, current state, model comparison in progress
+- Changed: CHANGELOG.md — this entry
+- Created: games/*/README.md — short README for all 13 games (created where none existed; briefing.md games get README alongside)
+- Outcome: all docs reflect actual state; no invented content
+- Dead ends: none
+
 ## 2026-07-24 — training.json deep upgrade (all 11 games)
 - Changed: ssh-weak-password/training.json — created (9 levels), NovaTech Corp story, hydra/nmap, flag ~/flag.txt
 - Changed: shellshock/training.json — created (9 levels), CVE-2014-6271, User-Agent injection, www-data context

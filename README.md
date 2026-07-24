@@ -1,305 +1,275 @@
-# WMG Cyberrange Internship
+# WMG CyberRange Internship — Autonomous Game Builder
 
-## Project Overview & Research Context
+**WMG Summer Research Internship 2026 · University of Warwick**
 
-This repository is the working output of a summer internship project with
-WMG (Warwick Manufacturing Group), University of Warwick. The goal is to
-build a small, self-contained, reproducible "cyberrange": a local Docker
-target machine deliberately configured with well-known, real vulnerability
-classes, driven entirely by Ansible so the whole environment can be torn
-down and rebuilt from source at any time.
+---
 
-Each vulnerability is packaged as a self-contained **game** under `games/`,
-with a student-facing briefing, a set of progressive hints, and a full
-instructor solution guide so the same repository can be used both for
-self-directed practice and for supervised teaching sessions.
+## Research Question
 
-The three games currently implemented:
+> Can Claude autonomously build, deploy, and verify cybersecurity training games for the CyberRangeCZ platform — from a single-sentence learning objective to a passing end-to-end verification — with no human intervention?
 
-1. **SSH Weak Password Attack** : dictionary/brute-force attacks against a
-   weak account password.
-2. **Shellshock (CVE-2014-6271)** : a real, historically accurate remote
-   code execution bug in `bash`, exploited through a CGI script.
-3. **Network Reconnaissance** : enumerating multiple open services and
-   telling real leads apart from decoys.
+This repository is the working output of that investigation. It contains 13 verified cybersecurity training games, an evidence-based verification harness, and an autonomous generation pipeline driven entirely by Claude.
+
+---
+
+## What Was Built
+
+| Game | Vulnerability Class | Flag | Status |
+|------|--------------------|----|--------|
+| `ssh-weak-password` | SSH brute-force (hydra) | `WMG{ssh_w3ak_p4ssw0rds_are_never_ok}` | PASS |
+| `shellshock` | CVE-2014-6271 Apache CGI RCE | `WMG{sh3llsh0ck_cve_2014_6271_env_vars_are_scary}` | PASS |
+| `network-recon` | Port/service enumeration | `WMG{r3c0n_1s_m0r3_th4n_just_p0rt_sc4nning}` | PASS |
+| `ftp-anon` | Anonymous FTP access | `WMG{anon_ftp_1s_a_s3curity_r1sk}` | PASS |
+| `suid-privesc` | SUID binary privilege escalation | `WMG{su1d_b4sh_pr1v3sc_1s_trivial}` | PASS |
+| `sqli-login` | SQL injection login bypass | `WMG{sq1_1nj3ct10n_byp4ss3d_auth}` | PASS |
+| `dir-traversal` | Directory/path traversal | `WMG{d1r_trav3rs4l_n0_s4n1t1z3d_p4ths}` | PASS |
+| `xss-stored` | Stored XSS cookie theft | `WMG{xss_st0l3n_admin_s3ss10n}` | PASS |
+| `ssh-weak-v2` | Weak SSH password — maritime scenario | `WMG{w3ak_ssh_cr3ds_s1nk_sh1ps}` | PASS |
+| `sqli-v2` | UNION-based SQL injection | `WMG{un10n_b4s3d_sql1_l34ks_th3_db}` | PASS |
+| `privesc-v2` | sudo NOPASSWD misconfiguration | `WMG{sud0_f1nd_3xec_r00ts_y0u}` | PASS |
+| `ssh-weak-v3` | Weak SSH password — academic sector | `WMG{c4mpus_pw_t00_pr3d1ct4bl3}` | PASS |
+| `sqli-v3` | Boolean blind SQL injection | `WMG{bl1nd_sql1_tr00th_0r_n0_tr00th}` | PASS |
+
+**verify-all.sh result: 13/13 PASS (100%)**
+
+Every game has:
+- A 9-level `training.json` with immersive scenario prose, MITRE ATT&CK technique tags, and 2–3 hints per level
+- An Ansible `setup.yml` playbook (idempotent, tested against local Docker and CyberRangeCZ)
+- A standalone `exploits/<name>.exploit` script that runs the real attack and retrieves the flag
+- A CyberRangeCZ deployment repo (`topology.yml` + role-based `provisioning/`)
+
+---
 
 ## Architecture
 
 ```
-                         Host machine (Windows 11 + WSL2 Ubuntu)
-  ┌───────────────────────────────────────────────────────────────────┐
-  │  Docker Desktop                                                    │
-  │                                                                     │
-  │   ┌──────────────────────┐   docker network:      ┌──────────────┐│
-  │   │   cyberrange-target   │◄──── cyberrange-net ──►│cyberrange-   ││
-  │   │  (Ubuntu 22.04 +      │                        │  attacker    ││
-  │   │   openssh-server)     │                        │(Kali + hydra,││
-  │   │                        │                        │ nmap, curl…) ││
-  │   │  port 2222 ─► host    │                        └──────────────┘│
-  │   │  (published for SSH)  │                                         │
-  │   └──────────▲────────────┘                                         │
-  │              │ SSH (ansible_connection=ssh)                         │
-  └──────────────┼────────────────────────────────────────────────────┘
-                  │
-         ┌────────┴─────────┐
-         │  Ansible control  │   inventory/hosts.ini
-         │  (WSL Ubuntu,      │   games/*/setup.yml
-         │   ansible-core     │
-         │   2.21.1)          │
-         └────────────────────┘
+Instructor types one sentence:
+  "Build a game teaching boolean blind SQL injection"
+              │
+              ▼
+  CLAUDE.md + skills/
+  (platform constraints, Ansible rules,
+   training.json schema, scoring rules)
+              │
+              ▼
+        Claude CLI
+   (claude -p prompts/new-game-template.txt)
+              │
+     ┌────────┴────────┐
+     │                 │
+     ▼                 ▼
+games/<name>/    agent-harness/
+  setup.yml       exploits/<name>.exploit
+  training.json
+     │
+     ▼
+agent-harness/verify.sh <name>
+  1. ansible-playbook (deploy to Docker target)
+  2. run_exploit()    (real attack against live target)
+  3. flag match       (byte-for-byte)
+  4. exit 0 = PASS    (the only definition of done)
+              │
+              ▼
+CyberRangeCZ deployment repo
+  topology.yml + provisioning/
+  (pushed to GitHub, imported via portal)
 ```
 
-- **`cyberrange-target`** is the single "victim" machine. All three games'
-  playbooks configure this one container, layering their vulnerabilities on
-  top of each other (this mirrors a realistic pentest target that has more
-  than one problem at once).
-- **`cyberrange-attacker`** is an optional, disposable toolbox container
-  used to run `hydra`, `nmap`, `curl`, etc. against the target without
-  installing anything on the host. It sits on the same Docker network as
-  the target so it can reach it directly by container name.
-- **Ansible** runs from the WSL host and drives the target exclusively over
-  SSH on its published port `2222`.
+The pipeline is fully autonomous: `generate-and-verify.sh` loops Claude → deploy → verify → repair until `verify.sh` returns exit 0, or a retry limit is reached.
 
-## Directory Layout
+---
+
+## Model Comparison
+
+Models tested for autonomous game generation quality:
+
+| Model | Role |
+|-------|------|
+| Claude Sonnet 4.6 | Primary — all 13 games generated and verified |
+| Claude Fable 5 | Being evaluated for generation quality comparison |
+| Claude Haiku 4.5 | Being evaluated for speed/cost trade-off |
+| Claude Opus 4.8 | Being evaluated for hardest multi-stage games |
+
+Model comparison is ongoing. Findings will be recorded in `research-logs/research-log.md`.
+
+---
+
+## Directory Structure
 
 ```
 wmg-cyberrange-internship/
-├── README.md                       <- this file
-├── docker/
-│   ├── Dockerfile.target           <- builds the vulnerable target image
-│   └── Dockerfile.attacker         <- builds the attacker toolbox image
-├── inventory/
-│   └── hosts.ini                   <- Ansible inventory for the target
-├── games/
+├── README.md                        ← this file
+├── CLAUDE.md                        ← prime directives for the AI agent
+├── DESIGN.md                        ← current task, plan, facts, gaps
+├── CHANGELOG.md                     ← what changed, what failed, dead ends
+│
+├── games/                           ← one sub-directory per game
 │   ├── ssh-weak-password/
-│   │   ├── setup.yml               <- Ansible playbook for this game
-│   │   ├── files/wordlist.txt      <- password wordlist used by hydra
-│   │   ├── briefing.md             <- student-facing scenario
-│   │   ├── hints.md                <- progressive hints
-│   │   └── solution.md             <- full instructor walkthrough
-│   ├── shellshock/
-│   │   ├── setup.yml
-│   │   ├── files/status.cgi
-│   │   ├── briefing.md
-│   │   ├── hints.md
-│   │   └── solution.md
-│   └── network-recon/
-│       ├── setup.yml
-│       ├── files/{banner_service.py.j2, ftp_readme.txt, decoy_index.html}
-│       ├── briefing.md
-│       ├── hints.md
-│       └── solution.md
-└── research-logs/
-    └── research-log.md             <- chronological build log
+│   │   ├── setup.yml                ← Ansible playbook (deploy the game)
+│   │   ├── files/                   ← supporting files (wordlists, scripts)
+│   │   ├── training.json            ← 9-level CyberRangeCZ training definition
+│   │   └── README.md
+│   └── … (13 games total)
+│
+├── agent-harness/                   ← verification + generation harness
+│   ├── verify.sh                    ← verify ONE game end-to-end
+│   ├── verify-all.sh                ← verify ALL games, print suite summary
+│   ├── generate-and-verify.sh       ← autonomous generate→verify→repair loop
+│   ├── lib.sh                       ← shared functions
+│   ├── exploits/                    ← one .exploit file per game
+│   ├── prompts/                     ← prompt templates for new-game generation
+│   ├── logs/                        ← per-run generate-and-verify logs
+│   └── README.md
+│
+├── docker/
+│   ├── Dockerfile.target            ← Ubuntu 22.04 + openssh-server base image
+│   └── Dockerfile.attacker          ← Kali toolbox (hydra, nmap, sqlmap, …)
+│
+├── inventory/
+│   └── hosts.ini                    ← Ansible inventory for local Docker target
+│
+├── skills/                          ← Claude skill files (platform knowledge)
+│   ├── cyberrange-platform.md
+│   ├── ansible-conventions.md
+│   ├── game-design.md
+│   ├── training-levels.md
+│   └── … (16 skill files)
+│
+├── research-logs/
+│   ├── research-log.md              ← chronological build log (weeks 1–3)
+│   ├── verification-log.md          ← append-only evidence log (auto-generated)
+│   └── generate-verify-log.md       ← generate-and-verify loop log
+│
+└── dashboard/
+    └── index.html                   ← local results dashboard
 ```
+
+---
 
 ## Prerequisites
 
-- Windows 11 with WSL2 and a Linux distribution installed (this project
-  was built against Ubuntu on WSL2).
-- Docker Desktop, with the WSL2 integration enabled for your distro.
-- Inside WSL:
-  - `ansible-core` (this project was built and tested against `2.21.1`)
-  - `sshpass` (for password-based SSH testing/verification)
-  - `git` (optional, if you clone rather than copy this repo)
+- Windows 11 with WSL2 (Ubuntu)
+- Docker Desktop with WSL2 integration enabled
+- Inside WSL: `ansible-core` (tested on 2.21.1), `sshpass`, `python3`, `git`
+- Claude CLI (`claude`) installed and authenticated
 
-You do **not** need `hydra` or `nmap` installed on the host : both are
-provided via the `cyberrange-attacker` Docker image (see below), so no
-`sudo`/host package installs are required to run or verify the games.
+Attack tools (`hydra`, `nmap`, `sqlmap`, `curl`, `nc`, etc.) are pre-installed in the `cyberrange-attacker` Docker image — no host installs needed.
 
-## Installation
+---
+
+## Local Setup
 
 ```bash
-git clone <this-repo-url> wmg-cyberrange-internship
-cd wmg-cyberrange-internship
-```
-
-(Or copy the files directly if you already have them.)
-
-## Docker Setup
-
-Build the two images and the target container:
-
-```bash
-# Build the vulnerable target base image (Ubuntu 22.04 + openssh-server)
+# 1. Build the target base image
 docker build -t cyberrange-target-base -f docker/Dockerfile.target .
 
-# Build the attacker toolbox image (Kali + hydra, nmap, curl, ftp, nc)
-docker build -t cyberrange-attacker -f docker/Dockerfile.attacker .
+# 2. Run the target (SSH on 2222, HTTP on 80, FTP on 21, banner on 8888)
+docker run -d --name cyberrange-target \
+  -p 2222:22 -p 80:80 -p 21:21 -p 8888:8888 \
+  --cap-add=NET_ADMIN cyberrange-target-base
 
-# Create a shared network so the attacker container can reach the target
-# by name on every port, not just the ones published to the host
-docker network create cyberrange-net
-
-# Run the target, publishing SSH on host port 2222
-docker run -d --name cyberrange-target -p 2222:22 --cap-add=NET_ADMIN cyberrange-target-base
-docker network connect cyberrange-net cyberrange-target
-```
-
-**Why a custom-built target image instead of a stock "vulnerable OS" image?**
-See `research-logs/research-log.md`, Entries 1–3: `ansible-core 2.21.1`
-requires Python **3.9+** on managed nodes, but the originally-planned
-`rastasheep/ubuntu-sshd:18.04` image only ships Python 3.6.5 and has no
-upgrade path past 3.8 in its own package repositories. Building from
-`ubuntu:22.04` (Python 3.10 by default) solves this with a ~15 second build
-instead of compiling a toolchain from source.
-
-**Rebuilding the target from scratch:** because it's ephemeral and its SSH
-host key changes on every rebuild, destroy and recreate it with:
-
-```bash
-docker rm -f cyberrange-target
-docker run -d --name cyberrange-target -p 2222:22 --cap-add=NET_ADMIN cyberrange-target-base
-docker network connect cyberrange-net cyberrange-target
-```
-
-## Inventory
-
-`inventory/hosts.ini`:
-
-```ini
-[cyberrange]
-target ansible_host=127.0.0.1 ansible_port=2222 ansible_user=root ansible_password=root \
-  ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null' \
-  ansible_python_interpreter=/usr/bin/python3
-```
-
-Notes:
-- `ansible_password=root` matches the root password baked into
-  `docker/Dockerfile.target` : this is a local, disposable training
-  container, not a production credential.
-- `UserKnownHostsFile=/dev/null` is required because the container
-  generates a new SSH host key on every rebuild; without it, SSH refuses
-  to connect after the first rebuild (see research log Entry 3).
-- `ansible_python_interpreter=/usr/bin/python3` explicitly targets Python
-  3.10 on the container, rather than relying on Ansible's interpreter
-  auto-discovery.
-
-## Ansible
-
-Each game is a single, standalone playbook (`games/<game>/setup.yml`) that
-targets the `cyberrange` group defined in the inventory. Playbooks are
-designed to be:
-
-- **Idempotent** : safe to re-run any number of times; a second run always
-  reports `changed=0` for that game.
-- **Independent** : each game installs everything it needs itself (even if
-  another game already installed the same package, e.g. `apache2`), so any
-  single game can be run on its own.
-- **Composable** : all three can run against the same target container
-  without conflicting (verified in research log Entry 11).
-
-Test connectivity at any time with:
-
-```bash
+# 3. Test connectivity
 ansible -i inventory/hosts.ini cyberrange -m ping
 ```
 
-## Running the Games
+Rebuild the target from scratch at any time:
+```bash
+docker rm -f cyberrange-target
+docker run -d --name cyberrange-target \
+  -p 2222:22 -p 80:80 -p 21:21 -p 8888:8888 \
+  --cap-add=NET_ADMIN cyberrange-target-base
+```
+
+---
+
+## Running a Game
 
 ```bash
-ansible-playbook -i inventory/hosts.ini games/ssh-weak-password/setup.yml
-ansible-playbook -i inventory/hosts.ini games/shellshock/setup.yml
-ansible-playbook -i inventory/hosts.ini games/network-recon/setup.yml
+# Deploy a specific game to the target
+ansible-playbook -i inventory/hosts.ini games/sqli-v3/setup.yml
+
+# Verify it works end-to-end
+./agent-harness/verify.sh sqli-v3
 ```
 
-Each game's `briefing.md` is the student-facing starting point; `hints.md`
-gives progressive nudges; `solution.md` is the full instructor walkthrough
-with exact commands and expected output.
+---
 
-### Expected outputs
-
-**Game 1 : SSH Weak Password Attack**
-```
-ansible-playbook ... -> ok=7 changed=4 failed=0   (first run)
-ansible-playbook ... -> ok=7 changed=0 failed=0   (re-run)
-hydra -l student -P games/ssh-weak-password/files/wordlist.txt ssh://127.0.0.1 -s 2222
-  -> [22][ssh] host: ... login: student password: password123
-ssh -p 2222 student@127.0.0.1 'cat flag.txt'
-  -> WMG{ssh_w3ak_p4ssw0rds_are_never_ok}
-```
-
-**Game 2 : Shellshock (CVE-2014-6271)**
-```
-ansible-playbook ... -> ok=13 changed=10 failed=0   (first run)
-ansible-playbook ... -> ok=11 changed=0 failed=0    (re-run)
-curl -H 'User-Agent: () { :; }; echo; echo; /bin/cat /opt/flag.txt' \
-  http://127.0.0.1/cgi-bin/status.cgi
-  -> WMG{sh3llsh0ck_cve_2014_6271_env_vars_are_scary}
-```
-
-**Game 3 : Network Reconnaissance**
-```
-ansible-playbook ... -> ok=15 changed=10 failed=0 ignored=1   (first run)
-ansible-playbook ... -> ok=13 changed=0 failed=0 skipped=4    (re-run)
-nmap -sV -p21,80,8888 127.0.0.1
-  -> 21/tcp ftp, 80/tcp http (both decoys), 8888/tcp unknown/banner service
-nc 127.0.0.1 8888
-  -> WMG{r3c0n_1s_m0r3_th4n_just_p0rt_sc4nning}
-```
-
-(The single "ignored" failure on Game 3's first run is expected: it's a
-`wait_for` pre-check confirming the banner service isn't already running,
-which fails by design before the service has ever been started.)
-
-### Using the attacker toolbox
+## Verifying All Games
 
 ```bash
-# Any tool, against the target by container name on the shared network:
-docker run --rm --network cyberrange-net cyberrange-attacker <command...>
-
-# Example: hydra against Game 1, using the wordlist shipped in this repo
-docker run --rm --network cyberrange-net \
-  -v "$(pwd)/games/ssh-weak-password/files:/wordlists:ro" \
-  cyberrange-attacker hydra -l student -P /wordlists/wordlist.txt ssh://cyberrange-target
+./agent-harness/verify-all.sh
 ```
+
+Expected output (abridged):
+
+```
+PASS  ssh-weak-password   (ok=7   changed=0  5.0s)
+PASS  shellshock          (ok=11  changed=1  13.2s)
+...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Suite result: 13/13 PASS  (100%)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+---
+
+## Generating a New Game
+
+```bash
+# Edit the prompt template with your learning objective
+cp agent-harness/prompts/new-game-template.txt agent-harness/prompts/my-game.txt
+# … edit my-game.txt …
+
+# Run the autonomous loop: Claude builds → harness verifies → Claude repairs
+./agent-harness/generate-and-verify.sh agent-harness/prompts/my-game.txt my-game-name
+```
+
+The loop runs until `verify.sh` returns exit 0 (PASS) or `MAX_ITERATIONS` (default 5) is reached. No human steps between prompt and verified game.
+
+---
+
+## CyberRangeCZ Deployment Repos
+
+Each game has a separate GitHub repo for CyberRangeCZ import:
+
+| Game | Repo | Subnet |
+|------|------|--------|
+| ssh-weak-password | `IBsandeshCT/wmg-ssh-cyberrange` | — |
+| shellshock | `IBsandeshCT/wmg-shellshock-cyberrange` | — |
+| network-recon | `IBsandeshCT/wmg-network-recon-cyberrange` | — |
+| suid-privesc | `IBsandeshCT/wmg-suid-privesc-cyberrange` | 10.1.28.0/24 |
+| sqli-login | `IBsandeshCT/wmg-sqli-login-cyberrange` | 10.1.29.0/24 |
+| dir-traversal | `IBsandeshCT/wmg-dir-traversal-cyberrange` | 10.1.30.0/24 |
+| xss-stored | `IBsandeshCT/wmg-xss-stored-cyberrange` | 10.1.31.0/24 |
+| ssh-weak-v2 | `IBsandeshCT/wmg-ssh-weak-v2-cyberrange` | 10.1.32.0/24 |
+| sqli-v2 | `IBsandeshCT/wmg-sqli-v2-cyberrange` | 10.1.33.0/24 |
+| privesc-v2 | `IBsandeshCT/wmg-privesc-v2-cyberrange` | 10.1.34.0/24 |
+| ssh-weak-v3 | `IBsandeshCT/wmg-ssh-weak-v3-cyberrange` | 10.1.35.0/24 |
+| sqli-v3 | `IBsandeshCT/wmg-sqli-v3-cyberrange` | 10.1.36.0/24 |
+
+Next available subnet: **10.1.37.0/24**
+
+---
+
+## Research Findings (Weeks 1–3)
+
+**Week 1:** Local Docker + Ansible environment established. Python version incompatibility discovered and resolved (18.04 → 22.04). First 3 games built and verified.
+
+**Week 2:** Verification harness (`verify.sh`, `verify-all.sh`, `lib.sh`) designed and built. 4 more games added (ftp-anon, suid-privesc, sqli-login, dir-traversal, xss-stored, ssh-weak-v2, sqli-v2, privesc-v2). 100% pass rate maintained throughout.
+
+**Week 3:** `generate-and-verify.sh` autonomous loop built. 2 more games (ssh-weak-v3, sqli-v3). All 11 original `training.json` files upgraded from 5-level to 9-level format with immersive scenario prose, MITRE ATT&CK tags, and 2–3 hints per level. 13/13 PASS.
+
+**Key finding:** Claude can build a new, verified, CyberRangeCZ-ready game from a single-sentence learning objective with zero failed verification attempts across 13 games (13 first-attempt PASSes, 1 pre-run dead-end caught before verification).
+
+---
 
 ## Troubleshooting
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| `ansible ... -m ping` fails with a Python `SyntaxError` about `from __future__ import annotations` | Target's Python is too old for the installed `ansible-core` | Confirm the target is running the custom `cyberrange-target-base` image (Python 3.10), not an older stock image |
-| `ansible ... -m ping` fails with `Ansible requires Python 3.9 or newer` | Same as above | Same as above |
-| SSH connection fails with `WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!` | Container was rebuilt (new SSH host key) and the old key is cached | Ensure `inventory/hosts.ini` has `-o UserKnownHostsFile=/dev/null` in `ansible_ssh_common_args` |
-| A `command`/`shell` task in a playbook hangs forever | The command doesn't self-daemonize (e.g. `vsftpd` on this image runs in the foreground) | Use `async: 86400, poll: 0` to launch it fire-and-forget, as done in `games/network-recon/setup.yml` |
-| Anonymous FTP connects but every transfer fails | `secure_chroot_dir` (`/var/run/vsftpd/empty`) doesn't exist : normally created by `systemd-tmpfiles` at boot, which never runs in this container | Ensure the directory is created explicitly (already handled in `games/network-recon/setup.yml`) |
-| A `command` task with `creates:` re-runs every time despite the target existing | The actual file created doesn't match the assumed name (e.g. `a2enmod cgi` creates `cgid.load`, not `cgi.load`, under a threaded MPM) | Check what the command actually created with `ls` before writing the `creates:` guard |
-| `sudo` fails with "interactive authentication is required" | No passwordless sudo configured for the current shell/session | Avoid host-level installs entirely : use the `cyberrange-attacker` container instead |
-
-## Learning Objectives
-
-**Game 1 : SSH Weak Password Attack**
-- Understand why password strength and account lockout policies matter.
-- Practice using `hydra` for credential brute-forcing against a real
-  service.
-- Recognize that file permissions, not obscurity, are what actually
-  protects data after a compromise.
-
-**Game 2 : Shellshock (CVE-2014-6271)**
-- Understand how CGI exposes HTTP headers as environment variables, and
-  why that's dangerous when the interpreter has a parsing bug.
-- Practice crafting an HTTP header-based exploit with `curl`.
-- Understand the real-world lesson: patching the OS isn't enough if a
-  legacy script is pinned to an old, unpatched interpreter.
-
-**Game 3 : Network Reconnaissance**
-- Practice comprehensive port scanning (not just default top-N ports).
-- Practice service/version fingerprinting with `nmap -sV`.
-- Build the judgment to distinguish real leads from decoys rather than
-  assuming every open port is significant.
-
-## Future Improvements
-
-- Add a fourth game covering a web application vulnerability class (e.g.
-  SQL injection or a vulnerable file upload) to round out the OWASP-style
-  coverage.
-- Add an Ansible-driven teardown/reset playbook per game (currently reset
-  is done by destroying and rebuilding the whole container).
-- Parameterize flags (e.g. per-student unique flags) for use in a
-  classroom setting with automated grading.
-- Add a `Vagrantfile`/cloud alternative to the Docker-based setup for
-  environments where Docker Desktop isn't available.
-- Wire up CI (e.g. a scheduled GitHub Actions job) to rebuild the target
-  and re-run every game's playbook automatically, catching regressions
-  from upstream package updates (e.g. a future Ubuntu 22.04 point release
-  changing `vsftpd`'s default config).
+| Symptom | Fix |
+|---------|-----|
+| `ansible -m ping` fails: Python SyntaxError | Target running old image; rebuild from `docker/Dockerfile.target` |
+| SSH fails: `REMOTE HOST IDENTIFICATION HAS CHANGED` | `hosts.ini` must have `-o UserKnownHostsFile=/dev/null` |
+| vsftpd hangs on deploy | Use `async: 86400, poll: 0`; create `/var/run/vsftpd/empty` first |
+| `a2enmod cgi` `creates:` guard re-runs every time | Threaded MPM creates `cgid.load` not `cgi.load`; check actual file |
+| Apache CGI exploit fails after deploy | Add explicit `meta: flush_handlers` after `a2enmod` tasks |
+| sshd restart kills container | Never restart sshd where it is PID 1 (Docker init-less containers) |

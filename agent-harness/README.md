@@ -5,6 +5,8 @@ a generated cyber-range exercise actually works, by deploying it and running the
 real exploit against a live target. A game is only "done" when a real attack
 retrieves the expected flag — never when the model merely *claims* it does.
 
+**Current result: 13/13 PASS (100%)**
+
 ---
 
 ## Purpose
@@ -53,20 +55,6 @@ Three principles drive the design:
    is an audit trail: you can see that a game was verified, when, how long it
    took, and whether a human intervened.
 
-### Why AI-generated infrastructure *must* be verified
-
-- **Confident wrongness.** LLMs express the same certainty for correct and
-  incorrect output. Self-reported success is not evidence.
-- **Silent environmental drift.** systemd-less containers, threaded Apache MPMs,
-  CRLF shebangs, missing chroot dirs — a playbook that "looks right" fails in
-  ways only a live run surfaces (see `research-logs/research-log.md`).
-- **Idempotency regressions.** A game that deploys once but is not idempotent
-  will break on redeploy. Re-running verification catches `changed>0` on the
-  second pass.
-- **Answer integrity.** Training platforms score trainees on flags. If the
-  planted flag does not match what the exploit yields, the exercise is broken
-  for everyone. Only an end-to-end run proves the two agree.
-
 ---
 
 ## Architecture
@@ -90,8 +78,15 @@ Three principles drive the design:
   │ verify-all.sh│  discovers games/*/setup.yml, runs verify.sh per
   │              │  game, prints a suite summary, exits 0 iff all pass
   └──────────────┘
+        ▲
+        │ sources verify.sh
+  ┌──────────────────────┐
+  │ generate-and-verify  │  autonomous loop: Claude generates →
+  │        .sh           │  verify.sh runs → if FAIL, Claude repairs
+  └──────────────────────┘  until exit 0 or MAX_ITERATIONS reached
+
                                      │ ansible over SSH (2222)
-                                     │ exploits over 2222 / 80 / 8888
+                                     │ exploits over 2222 / 80 / 8888 / 21
                                      ▼
                         ┌──────────────────────────┐
                         │  docker: cyberrange-target │
@@ -114,13 +109,28 @@ the core scripts never hardcode game names or flags.
 agent-harness/
 ├── verify.sh                    # verify ONE game end-to-end
 ├── verify-all.sh                # discover & verify EVERY game, then summarise
+├── generate-and-verify.sh       # autonomous generate → verify → repair loop
 ├── lib.sh                       # shared functions (sourced, no side effects)
-├── claude-generate-and-verify.md# the generate → verify → repair loop for agents
+├── claude-generate-and-verify.md# generate→verify→repair loop instructions for agents
 ├── README.md                    # this file
+├── prompts/                     # prompt templates for new-game generation
+│   └── new-game-template.txt
+├── logs/                        # per-run generate-and-verify output logs
+├── state/                       # intermediate state files for repair loop
 └── exploits/                    # one self-contained exploit per game
     ├── ssh-weak-password.exploit
     ├── shellshock.exploit
-    └── network-recon.exploit
+    ├── network-recon.exploit
+    ├── ftp-anon.exploit
+    ├── suid-privesc.exploit
+    ├── sqli-login.exploit
+    ├── dir-traversal.exploit
+    ├── xss-stored.exploit
+    ├── ssh-weak-v2.exploit
+    ├── sqli-v2.exploit
+    ├── privesc-v2.exploit
+    ├── ssh-weak-v3.exploit
+    └── sqli-v3.exploit
 
 research-logs/
 └── verification-log.md          # append-only evidence log (auto-initialised)
@@ -144,84 +154,118 @@ ports published to the host that the exploits connect to:
 
 ```bash
 docker run -d --name cyberrange-target \
-  -p 2222:22 -p 80:80 -p 8888:8888 \
+  -p 2222:22 -p 80:80 -p 8888:8888 -p 21:21 \
   --cap-add=NET_ADMIN cyberrange-target-base:latest
 ```
 
-Verify one game:
+### Verify one game
 
 ```bash
 ./agent-harness/verify.sh shellshock
+./agent-harness/verify.sh sqli-v3
 ```
 
-Verify every game and get a suite summary:
+### Verify every game
 
 ```bash
 ./agent-harness/verify-all.sh
 ```
 
+Expected output:
+```
+PASS  ssh-weak-password   (ok=7   changed=0  5.0s)
+PASS  shellshock          (ok=11  changed=1  13.2s)
+PASS  network-recon       (ok=13  changed=0  14.1s)
+...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Suite result: 13/13 PASS  (100%)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+### Generate and verify a new game autonomously
+
+```bash
+# Supply a prompt describing the game you want
+./agent-harness/generate-and-verify.sh agent-harness/prompts/my-game.txt my-game-name
+
+# Skip generation, just verify files already on disk
+SKIP_GENERATE=1 ./agent-harness/generate-and-verify.sh prompts/unused.txt my-game-name
+```
+
+`generate-and-verify.sh` calls Claude to produce `games/<name>/setup.yml`,
+`games/<name>/training.json`, and `exploits/<name>.exploit`, then immediately
+runs `verify.sh`. If verify fails, it feeds the failure output back to Claude
+for repair, looping up to `MAX_ITERATIONS` times (default 5).
+
+Environment variables for `generate-and-verify.sh`:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `MAX_ITERATIONS` | `5` | Repair attempts before giving up |
+| `SKIP_GENERATE` | `0` | `1` = skip Claude, verify existing files |
+| `CLAUDE_BIN` | `claude` | Claude CLI binary path |
+| `CLAUDE_EXTRA_ARGS` | (empty) | Extra args appended to every `claude` call |
+
 Exit codes:
 
-| Code | Meaning                                                        |
-|------|----------------------------------------------------------------|
-| 0    | Full PASS: deployment OK **and** exploit succeeded **and** flag matched |
-| 1    | Verification FAIL (deploy, exploit, or flag failed)            |
-| 2    | Usage error / unknown game / missing exploit definition        |
-| 3    | Missing required dependency                                    |
-| 130  | Interrupted (SIGINT/SIGTERM)                                   |
+| Code | Meaning |
+|------|---------|
+| 0 | Full PASS: deployment OK **and** exploit succeeded **and** flag matched |
+| 1 | Verification FAIL (deploy, exploit, or flag failed) |
+| 2 | Usage error / unknown game / missing exploit definition |
+| 3 | Missing required dependency |
+| 130 | Interrupted (SIGINT/SIGTERM) |
 
-Configuration (environment variables, all optional):
+Configuration for `verify.sh` / `verify-all.sh` (environment variables, all optional):
 
-| Variable             | Default     | Purpose                             |
-|----------------------|-------------|-------------------------------------|
-| `DEPLOY_TIMEOUT`     | `600`       | Max seconds for `ansible-playbook`  |
-| `EXPLOIT_TIMEOUT`    | `30`        | Max seconds for the exploit         |
-| `TARGET_HOST`        | `127.0.0.1` | Host the exploit connects to        |
-| `TARGET_SSH_PORT`    | `2222`      | Published SSH port                  |
-| `TARGET_HTTP_PORT`   | `80`        | Published HTTP port                 |
-| `TARGET_BANNER_PORT` | `8888`      | Published banner port               |
-| `NO_COLOR`           | (unset)     | Set to disable coloured output      |
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `DEPLOY_TIMEOUT` | `600` | Max seconds for `ansible-playbook` |
+| `EXPLOIT_TIMEOUT` | `30` | Max seconds for the exploit |
+| `TARGET_HOST` | `127.0.0.1` | Host the exploit connects to |
+| `TARGET_SSH_PORT` | `2222` | Published SSH port |
+| `TARGET_HTTP_PORT` | `80` | Published HTTP port |
+| `TARGET_BANNER_PORT` | `8888` | Published banner port |
+| `NO_COLOR` | (unset) | Set to disable coloured output |
 
 ---
 
-## Adding new games
+## Adding a new game
 
-1. Build and prove the game locally the usual way: `games/<name>/setup.yml`
-   plus its `files/`, verified against the Docker target (see the root
-   `CLAUDE.md`).
+1. Build and prove the game locally: `games/<name>/setup.yml` plus its `files/`,
+   verified against the Docker target (see the root `CLAUDE.md`).
 2. Drop an exploit definition at `agent-harness/exploits/<name>.exploit` (copy
    an existing one and adapt `GAME_TITLE`, `EXPECTED_FLAG`, and `run_exploit`).
-3. `./agent-harness/verify.sh <name>`.
+3. `./agent-harness/verify.sh <name>`
 
 `verify-all.sh` discovers the new game automatically — no script edits needed.
 
-## Adding new exploit tests
-
-The exploit is deliberately decoupled from the game so you can add or refine
-attacks without touching the harness. To change how a game is exploited, edit
-its `.exploit` file. To test a game a *second* way (e.g. a different Shellshock
-vector), add another exploit file and point a thin wrapper game name at it, or
-extend `run_exploit` to try multiple vectors and return success if any works.
-
-Keep two rules in mind:
+### Exploit file rules
 
 - `run_exploit` must **return a meaningful exit code** — non-zero when the
   attack mechanism fails. Do not `|| true` away a real failure.
-- Print the retrieved content to **stdout**; the harness greps stdout/stderr for
-  the flag.
+- Print the retrieved content to **stdout**; the harness greps stdout for the flag.
+- The exploit must be a standalone bash script that works from the repo root.
 
-## Extending the harness
+---
 
-- **New parsed metrics:** `recap_field` in `verify.sh` extracts any
-  `name=<int>` token from the Ansible recap; add more as needed.
-- **Different targets:** point `TARGET_HOST`/ports at a remote range instead of
-  local Docker; nothing in the harness assumes Docker beyond the dependency
-  check.
-- **CI integration:** `verify-all.sh` is CI-friendly — it exits non-zero on any
-  failure and writes a plain-text summary. Wrap it in a pipeline step and fail
-  the build on non-zero.
-- **Structured output:** the summary block is easy to switch to JSON if a
-  dashboard needs to consume results; keep the human box as well.
+## Current game results (13/13)
+
+| Game | Exploit mechanism | Duration |
+|------|-------------------|----------|
+| `ssh-weak-password` | `sshpass -p password123 ssh student@target 'cat ~/flag.txt'` | ~5s |
+| `shellshock` | `curl -H 'User-Agent: () { :; }; echo; /bin/cat /opt/flag.txt'` | ~13s |
+| `network-recon` | `echo \| nc -w3 target 8888` | ~14s |
+| `ftp-anon` | `curl ftp://target/pub/flag.txt` (anonymous) | ~5s |
+| `suid-privesc` | `sshpass ssh student@target '/bin/bash -p -c cat /root/flag.txt'` | ~5s |
+| `sqli-login` | `curl -d "username=' OR 1=1-- -&password=x"` | ~45s |
+| `dir-traversal` | `curl http://target/download.php?file=../secrets/flag.txt` | ~14s |
+| `xss-stored` | `curl POST guestbook → GET /bot.php → GET /collect.php` | ~15s |
+| `ssh-weak-v2` | `sshpass -p Sailor2024 ssh deckhand@target 'cat ~/manifest.txt'` | ~5s |
+| `sqli-v2` | `curl -G search.php --data-urlencode "q=' UNION SELECT note,'x'..."` | ~15s |
+| `privesc-v2` | `sshpass ssh webadmin@target 'sudo /usr/bin/find /etc/hostname -exec cat /root/flag.txt \;'` | ~15s |
+| `ssh-weak-v3` | `sshpass -p Campus2024 ssh itstaff@target 'cat ~/ticket-export.txt'` | ~5s |
+| `sqli-v3` | Python3 binary search UNICODE+SUBSTR over `lookup.php?id=N` | ~15s |
 
 ---
 
@@ -229,26 +273,27 @@ Keep two rules in mind:
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| `Missing required dependencies: docker` | Docker Desktop WSL integration off, or Desktop not running | Start Docker Desktop; enable WSL integration for the Ubuntu distro |
-| Deployment `unreachable=1` | Target container not running / SSH port not published | `docker run ... -p 2222:22 ...`; `ansible ... -m ping` |
-| Deploy OK but exploit `exit code 255` (SSH) | Wrong creds, account not created, or SSH port not published | Check the `student` user task; confirm `-p 2222` |
-| Deploy OK but exploit `exit code` non-zero (curl) | Apache not started, CGI module not enabled, wrong script path | Confirm `a2enmod cgi` created `cgid.load`; `apache2ctl start` |
-| Exploit succeeds but flag **not** found | Flag planted in the wrong path, or content mismatch | Compare `EXPECTED_FLAG` with the `flag_content` in the playbook |
-| Second deploy shows `changed>0` | Non-idempotent task (random salt, unconditional command) | Use a fixed salt / `creates:` guards / `changed_when: false` |
-| Banner exploit hangs then times out | Service bound to the wrong interface, or started in-container but port not published | Publish `-p 8888:8888`; confirm the service listens on `0.0.0.0` |
+| `Missing required dependencies: docker` | Docker Desktop not running or WSL integration off | Start Docker Desktop; enable WSL integration |
+| Deployment `unreachable=1` | Target container not running | `docker run ... -p 2222:22 ...`; `ansible ... -m ping` |
+| Deploy OK but exploit `exit code 255` (SSH) | Wrong creds or account not created | Check the user creation task; confirm `-p 2222` |
+| Deploy OK but exploit `exit code` non-zero (curl) | Apache not started or CGI not enabled | Confirm `a2enmod cgi` created `cgid.load`; check handler flush |
+| Exploit succeeds but flag **not** found | Flag planted in wrong path | Compare `EXPECTED_FLAG` with `flag_content` in playbook |
+| Second deploy shows `changed>0` unexpectedly | Non-idempotent task (random salt, unconditional command) | Use fixed salt / `creates:` guards / `changed_when: false` |
+| Banner exploit hangs then times out | Service bound to wrong interface or port not published | Publish `-p 8888:8888`; confirm service listens on `0.0.0.0` |
 
 ---
 
-## Future work
+## Extending the harness
 
+- **New parsed metrics:** `recap_field` in `verify.sh` extracts any `name=<int>`
+  token from the Ansible recap; add more as needed.
+- **Different targets:** point `TARGET_HOST`/ports at a remote CyberRangeCZ range
+  instead of local Docker; nothing in the harness assumes Docker beyond the
+  dependency check.
+- **CI integration:** `verify-all.sh` is CI-friendly — it exits non-zero on any
+  failure and writes a plain-text summary. Wrap it in a pipeline step and fail
+  the build on non-zero.
+- **Structured output:** the summary block is easy to switch to JSON if a
+  dashboard needs to consume results; keep the human box as well.
 - **Per-sandbox variant flags (APG):** verify variant answers by reading the
   generated flag from the sandbox rather than a hardcoded `EXPECTED_FLAG`.
-- **Fresh-target isolation:** optionally rebuild the container per game so games
-  cannot interfere (currently they share one long-lived target, which is fine
-  because each exploit is independent, but true isolation is stronger).
-- **Negative assertions:** confirm the flag is *not* readable *before* the
-  exploit (proving the exploit is what reveals it, not a misconfiguration).
-- **JSON evidence + dashboard feed:** emit machine-readable results alongside
-  the markdown log for the project dashboard.
-- **CyberRangeCZ shape:** extend beyond local `setup.yml` to verify the
-  role-based `provisioning/` + `topology.yml` deployment shape.
