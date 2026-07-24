@@ -1,0 +1,328 @@
+{
+  "title": "SSH Weak Password — Pennbridge Academy",
+  "description": "Crack a weak SSH password on a university learning platform, log in as the intern account, and retrieve the hidden flag.",
+  "prerequisites": [],
+  "outcomes": [
+    "Use nmap to identify open ports and running SSH software versions on a target host.",
+    "Explain why password authentication over SSH is dangerous when combined with weak passwords.",
+    "Perform an online dictionary attack against SSH using hydra and a common-password wordlist.",
+    "Authenticate with recovered credentials and retrieve sensitive files from a remote host."
+  ],
+  "state": "UNRELEASED",
+  "show_stepper_bar": true,
+  "variant_sandboxes": false,
+  "estimated_duration": 45,
+  "levels": [
+    {
+      "title": "Introduction",
+      "level_type": "INFO_LEVEL",
+      "order": 0,
+      "estimated_duration": 0,
+      "content": "# General information — please read carefully\n\n* Each level builds on the previous one. Do not skip ahead.\n* If you get stuck, use the hints — or search for the technique online.\n* This exercise is for educational purposes only. Only attack systems within your sandbox.\n\n# Storyline\n\nYou are a junior penetration tester at SecureWave Ltd. Your latest engagement is with **Pennbridge Academy**, a mid-sized UK distance-learning provider that delivers online courses to thousands of students across the country. The platform handles student records, coursework submissions, and assessment grades — making it a high-value target for anyone looking to steal or manipulate academic data.\n\nPennbridge's IT team is stretched thin. When the summer internship programme began three months ago, the sysadmin responsible for onboarding new interns created a shared account named `student` with the password `password123` — reasoning that it was 'just for interns, only used internally, and nobody hacks a university anyway'. That account has been live ever since, with password authentication enabled on the SSH service and no monitoring in place.\n\nYour job is to prove that reasoning wrong. Client recon has already established one key fact: there is an SSH service listening on the Pennbridge server and a shared account exists for interns. What you need to do now is confirm the SSH port, identify the SSH software, recover the username through OSINT, crack the password with a dictionary attack, and then log in to retrieve the flag stored in the intern account's home directory.\n\nThis is a classic scenario. Weak, guessable passwords combined with password-based SSH authentication are one of the most common findings in real penetration tests. Automated bots scan the internet constantly for exactly this configuration — organisations that leave weak accounts exposed are compromised within minutes. By the end of this exercise you will have experienced the attacker's perspective and understand precisely why password policies and key-based SSH authentication matter.\n\nRemember: every technique you use here is real. The only difference between this sandbox and a live engagement is that you have written permission to attack this target. Treat it with the same discipline you would apply to a real client."
+    },
+    {
+      "title": "Get Access",
+      "level_type": "ACCESS_LEVEL",
+      "order": 1,
+      "estimated_duration": 0,
+      "passkey": "start",
+      "cloud_content": "SSH to your attacker machine at **10.1.27.23** using your assigned credentials. Your target is the Pennbridge Academy server at **10.1.27.10** (SSH port 22).\n\nConfirm the target is reachable:\n\n```\nnc -zv 10.1.27.10 22\n```\n\nDo not attack anything outside this sandbox. Submit **start** to begin.",
+      "local_content": "The target SSH service is running locally on port **2222**:\n\n```\nnc -zv 127.0.0.1 2222\n```\n\nSubmit **start** to begin."
+    },
+    {
+      "title": "Scan for Open Ports",
+      "level_type": "TRAINING_LEVEL",
+      "order": 2,
+      "estimated_duration": 8,
+      "answer": "22",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Before attacking any service, a penetration tester performs reconnaissance to understand what is running on the target. The most fundamental recon tool is **nmap** — a network port scanner that probes a host and reports which ports are open and what services answer on them.\n\nRun a basic nmap scan against the Pennbridge server:\n\n```\nnmap -sV 10.1.27.10\n```\n\nThe `-sV` flag tells nmap to attempt **service version detection** — it will not just report that a port is open, it will try to identify the software and version running on it. This is far more useful than a plain port scan because it tells you exactly what you are dealing with.\n\nLook at the output. You will see a table listing open ports, their protocol (tcp/udp), their state (open/filtered/closed), the service name, and the version string. Find the port that is running an SSH service.\n\n**What port number is the SSH service listening on?**",
+      "solution": "```\n$ nmap -sV 10.1.27.10\nStarting Nmap ...\nPORT   STATE SERVICE VERSION\n22/tcp open  ssh     OpenSSH 8.9p1 Ubuntu ...\n```\n\nSSH is listening on port **22**.",
+      "solution_penalized": false,
+      "hints": [
+        {
+          "title": "What does nmap -sV do?",
+          "content": "nmap -sV scans the target for open ports and probes each one to detect what service and version is running. Look for the row in the output labelled 'ssh' — the first column is the port number.",
+          "hint_penalty": 5,
+          "order": 0
+        },
+        {
+          "title": "What port does SSH use by default?",
+          "content": "SSH uses port 22 by default. Unless the administrator has changed it to a non-standard port, you will find it at 22.",
+          "hint_penalty": 10,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 50,
+      "mitre_techniques": [
+        { "technique_key": "TA0043.T1046" }
+      ]
+    },
+    {
+      "title": "Identify the SSH Software",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 8,
+      "answer": "OpenSSH",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "The nmap output from the previous level contained more than just the port number — it also identified the SSH software running on the server. Knowing the exact software and version is important in a real engagement because different SSH implementations have different vulnerabilities and quirks.\n\nThe nmap `-sV` output shows a VERSION column. For SSH, this typically reads something like `OpenSSH 8.9p1 Ubuntu 3ubuntu0.6`. The software name is the first word in that string.\n\nIf you have not already run `nmap -sV 10.1.27.10`, run it now:\n\n```\nnmap -sV 10.1.27.10\n```\n\nLook at the VERSION column for the SSH port. What is the name of the SSH software implementation? Give just the software name, not the version number.\n\n**What SSH software is running on the Pennbridge server?**",
+      "solution": "```\n$ nmap -sV 10.1.27.10\nPORT   STATE SERVICE VERSION\n22/tcp open  ssh     OpenSSH 8.9p1 Ubuntu ...\n```\n\nThe software is **OpenSSH** — the standard open-source SSH implementation used on most Linux servers.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Where in the nmap output is the software name?",
+          "content": "In the nmap output table, the rightmost column is VERSION. For the SSH row, the version string starts with the software name followed by a version number.",
+          "hint_penalty": 10,
+          "order": 0
+        },
+        {
+          "title": "What is the most common SSH software on Linux?",
+          "content": "The vast majority of Linux servers run OpenSSH, which is the open-source implementation of the SSH protocol. It is the default on Ubuntu, Debian, CentOS, and most other distributions.",
+          "hint_penalty": 20,
+          "order": 1
+        },
+        {
+          "title": "The exact software name",
+          "content": "The answer is OpenSSH — check the VERSION column of the nmap output for the port 22 row.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0043.T1046" }
+      ]
+    },
+    {
+      "title": "Identify the Target Account",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 8,
+      "answer": "student",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "To run a dictionary attack you need a username to target. In a real engagement, attackers gather usernames through **OSINT** (Open Source Intelligence) — LinkedIn profiles, email format leaks, support ticket metadata, error messages, and configuration documentation.\n\nIn this exercise, pre-engagement reconnaissance of Pennbridge Academy's IT documentation and support portal has already been completed. The findings: the academy created a shared account for summer interns with a username that directly reflects their role at the university.\n\nIn British universities, the generic term for a person enrolled in courses — or assigned to a non-specialist account for training purposes — is the same word used colloquially for anyone learning something new.\n\nPennbridge's naming convention for shared non-specialist accounts follows a single lowercase word that describes the user's role. The IT admin confirmed this account exists with password authentication enabled.\n\n**What is the username of the shared intern account you will target?**",
+      "solution": "The intern account follows Pennbridge's naming convention: a single lowercase word describing the role. The account is named **student** — matching the role assigned to summer interns on the platform.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "What kind of account is it?",
+          "content": "The account is shared among summer interns. The username is a single lowercase English word that describes someone who studies or learns — the generic term for this role at a university.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What word describes a learner at a university?",
+          "content": "The English word for someone enrolled at a university is 'student'. The account follows a single-word lowercase naming convention.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The exact username",
+          "content": "The username is `student` — all lowercase, no numbers or special characters.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1087" }
+      ]
+    },
+    {
+      "title": "Crack the Password with Hydra",
+      "level_type": "TRAINING_LEVEL",
+      "order": 5,
+      "estimated_duration": 12,
+      "answer": "password123",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have a target username (`student`) and a confirmed SSH service on port 22. Now run an **online dictionary attack** — testing each password in a wordlist until one authenticates successfully.\n\nThe tool for this is **hydra**, which supports dozens of protocols including SSH. It tries each password in your wordlist automatically and reports valid credentials the moment it finds a match.\n\nRun the attack:\n\n```\nhydra -l student -P /usr/share/wordlists/rockyou.txt -t 4 ssh://10.1.27.10\n```\n\nBreaking down the flags:\n- `-l student` — single target login name\n- `-P /usr/share/wordlists/rockyou.txt` — password list (rockyou is a massive real-world breach wordlist)\n- `-t 4` — limit to 4 parallel threads (avoids triggering lockout or flood protection)\n- `ssh://10.1.27.10` — the protocol and target\n\nWait for hydra to output a line like `[22][ssh] host: 10.1.27.10 login: student password: XXXX`. The intern account uses a common password that appears early in most wordlists.\n\n**What password does hydra find for the student account?**",
+      "solution": "```\n$ hydra -l student -P /usr/share/wordlists/rockyou.txt -t 4 ssh://10.1.27.10\n...\n[22][ssh] host: 10.1.27.10   login: student   password: password123\n1 of 1 target successfully completed, 1 valid password found\n```\n\nThe password is **password123** — one of the most commonly used passwords in the world.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Hydra syntax for SSH",
+          "content": "Use: hydra -l <username> -P <wordlist> ssh://<target-ip>. The -l flag sets a single username, -P sets the password list file.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "Where is a good wordlist?",
+          "content": "The rockyou.txt wordlist (/usr/share/wordlists/rockyou.txt) contains millions of real passwords from data breaches. Most weak passwords appear in the first few thousand entries, so hydra finds them quickly.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The password pattern",
+          "content": "The IT admin chose a classic combination: the word 'password' followed by '123'. The exact password is password123.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0006.T1110.001" }
+      ]
+    },
+    {
+      "title": "Log In and Retrieve the Flag",
+      "level_type": "TRAINING_LEVEL",
+      "order": 6,
+      "estimated_duration": 8,
+      "answer": "WMG{ssh_w3ak_p4ssw0rds_are_never_ok}",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "You have working credentials: `student` / `password123`. Use them to authenticate over SSH and read the flag stored in the intern account's home directory.\n\nSSH in directly:\n\n```\nssh student@10.1.27.10\n# Enter the password when prompted: password123\ncat ~/flag.txt\n```\n\nOr do it in a single non-interactive command using `sshpass`:\n\n```\nsshpass -p 'password123' ssh -o StrictHostKeyChecking=no student@10.1.27.10 'cat ~/flag.txt'\n```\n\nThe `-o StrictHostKeyChecking=no` flag skips the host key prompt for sandbox use. In a real engagement you would verify the host key rather than bypass it.\n\nThe flag is the only content of `flag.txt`. In a real attack, this foothold would give you access to the intern's coursework submissions, uploaded files, and any other data the account can reach on the platform.\n\n**Submit the flag from ~/flag.txt.**",
+      "solution": "```\n$ sshpass -p 'password123' ssh -o StrictHostKeyChecking=no student@10.1.27.10 'cat ~/flag.txt'\nWMG{ssh_w3ak_p4ssw0rds_are_never_ok}\n```",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How do I SSH with a password non-interactively?",
+          "content": "Use sshpass: sshpass -p 'PASSWORD' ssh -o StrictHostKeyChecking=no USER@TARGET 'COMMAND'. This passes the password automatically without an interactive prompt.",
+          "hint_penalty": 20,
+          "order": 0
+        },
+        {
+          "title": "Where is the flag?",
+          "content": "Log in as student and run: cat ~/flag.txt — the tilde (~) expands to the user's home directory.",
+          "hint_penalty": 30,
+          "order": 1
+        },
+        {
+          "title": "What format is the flag?",
+          "content": "The flag starts with WMG{ and ends with }. It is the only content of flag.txt.",
+          "hint_penalty": 40,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 150,
+      "mitre_techniques": [
+        { "technique_key": "TA0001.T1078" }
+      ]
+    },
+    {
+      "title": "Discover the Second File",
+      "level_type": "TRAINING_LEVEL",
+      "order": 7,
+      "estimated_duration": 5,
+      "answer": "wordlist.txt",
+      "answer_variable_name": null,
+      "variant_answers": false,
+      "content": "Now that you have authenticated as `student`, explore the account's home directory more thoroughly. In a real engagement, post-exploitation enumeration often reveals more than just the initial target — credentials, configuration files, internal documentation, or tools that hint at the organisation's wider security posture.\n\nList all files in the student home directory:\n\n```\nsshpass -p 'password123' ssh -o StrictHostKeyChecking=no student@10.1.27.10 'ls -la ~'\n```\n\nYou have already found `flag.txt`. There is one other file in the home directory — one that is directly related to the attack you just performed.\n\nThink about what was used in the dictionary attack. The presence of this file on the compromised account hints at a secondary finding: the organisation's IT team may have been aware that weak passwords were in common use and had been compiling a list — but never enforced a policy to prevent them.\n\n**What is the name of the other file in the student home directory?**",
+      "solution": "```\n$ sshpass -p 'password123' ssh -o StrictHostKeyChecking=no student@10.1.27.10 'ls -la ~'\ntotal 16\ndrwx------ 2 student student 4096 ... .\ndrwxr-xr-x 3 root    root    4096 ... ..\n-rw------- 1 student student   38 ... flag.txt\n-rw-r--r-- 1 student student  ... ... wordlist.txt\n```\n\nThe second file is **wordlist.txt** — a common-password wordlist that the IT team stored in the intern account.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "How do I list all files including hidden ones?",
+          "content": "Use ls -la ~ — the -a flag shows hidden files (starting with .) and -l shows file details. Look for filenames other than flag.txt and the . / .. directory entries.",
+          "hint_penalty": 15,
+          "order": 0
+        },
+        {
+          "title": "What type of file would be related to password attacks?",
+          "content": "The dictionary attack you just ran used a list of common passwords. Look for a file whose name suggests it contains a list of words — it is already on the compromised account.",
+          "hint_penalty": 25,
+          "order": 1
+        },
+        {
+          "title": "The filename",
+          "content": "The file is named wordlist.txt — it is the common-password wordlist that was deployed to the intern account as part of the scenario setup.",
+          "hint_penalty": 30,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 100,
+      "mitre_techniques": [
+        { "technique_key": "TA0007.T1083" }
+      ]
+    },
+    {
+      "title": "Feedback",
+      "level_type": "ASSESSMENT_LEVEL",
+      "order": 8,
+      "estimated_duration": 5,
+      "assessment_type": "QUESTIONNAIRE",
+      "instructions": "Please answer these questions to help us improve this game.",
+      "questions": [
+        {
+          "question_type": "MCQ",
+          "text": "How difficult did you find this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 0,
+          "answer_required": true,
+          "choices": [
+            { "text": "Too easy",      "correct": true, "order": 0 },
+            { "text": "About right",   "correct": true, "order": 1 },
+            { "text": "Too difficult", "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Before this game, had you used hydra for SSH password attacks?",
+          "points": 0,
+          "penalty": 0,
+          "order": 1,
+          "answer_required": true,
+          "choices": [
+            { "text": "Yes, I use it regularly",        "correct": true, "order": 0 },
+            { "text": "I had heard of it but not used it", "correct": true, "order": 1 },
+            { "text": "No, this was completely new",   "correct": true, "order": 2 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "How clear were the level instructions?",
+          "points": 0,
+          "penalty": 0,
+          "order": 2,
+          "answer_required": true,
+          "choices": [
+            { "text": "Very clear",         "correct": true, "order": 0 },
+            { "text": "Mostly clear",        "correct": true, "order": 1 },
+            { "text": "Confusing at times",  "correct": true, "order": 2 },
+            { "text": "Hard to follow",      "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "What is the safest way to prevent SSH password brute-force attacks?",
+          "points": 0,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": true,
+          "choices": [
+            { "text": "Disable password authentication and use SSH keys only", "correct": true, "order": 0 },
+            { "text": "Use a long, complex password",                           "correct": true, "order": 1 },
+            { "text": "Change the SSH port to a non-standard value",           "correct": true, "order": 2 },
+            { "text": "Enable rate limiting with fail2ban",                    "correct": true, "order": 3 }
+          ]
+        },
+        {
+          "question_type": "FFQ",
+          "text": "What would you change or add to improve this game?",
+          "points": 0,
+          "penalty": 0,
+          "order": 4,
+          "answer_required": false,
+          "choices": []
+        }
+      ]
+    }
+  ]
+}
